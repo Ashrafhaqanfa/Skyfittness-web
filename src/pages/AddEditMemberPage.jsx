@@ -5,6 +5,13 @@ import TopBar from '../components/TopBar.jsx'
 import { useMembers, addMember, updateMember } from '../services/members.js'
 import { useCategoriesAndPlans, plansForCategory } from '../services/categoryPlans.js'
 
+const STANDARD_DURATIONS = [
+  { label: '1 Month', months: 1 },
+  { label: '3 Months', months: 3 },
+  { label: '6 Months', months: 6 },
+  { label: '1 Year', months: 12 },
+]
+
 const emptyForm = {
   memberCode: '', name: '', address: '', gender: 'male', dialCode: '+91', phone: '',
   dateOfBirth: '', goal: '', heightCm: '', weightKg: '', isVIP: false,
@@ -70,6 +77,13 @@ export default function AddEditMemberPage() {
       set('expiryDate', expiry.toISOString().slice(0, 10))
     }
   }
+
+  function applyDuration(months) {
+  const start = form.joinDate ? new Date(form.joinDate) : new Date()
+  const expiry = new Date(start)
+  expiry.setMonth(expiry.getMonth() + months)
+  set('expiryDate', expiry.toISOString().slice(0, 10))
+}
 
   function handleFile(setter, e) {
     const file = e.target.files?.[0]
@@ -210,7 +224,21 @@ export default function AddEditMemberPage() {
         <Disclosure title="Plan Details" open={planSectionOpen} onToggle={() => setPlanSectionOpen((v) => !v)}>
           {categories.length === 0 ? (
             <p className="text-xs text-gray-500">
-              No categories yet — go to More → Setup → Load sample categories & plans.
+            <div>
+  <p className="text-xs text-gray-500 mb-1.5">Duration</p>
+  <div className="grid grid-cols-4 gap-2">
+    {STANDARD_DURATIONS.map((d) => (
+      <button
+        key={d.months}
+        type="button"
+        onClick={() => applyDuration(d.months)}
+        className="border border-gray-200 rounded-xl py-2 text-xs font-semibold text-gray-700 active:bg-accent-light active:text-accent active:border-accent"
+      >
+        {d.label}
+      </button>
+    ))}
+  </div>
+</div>
             </p>
           ) : (
             <>
