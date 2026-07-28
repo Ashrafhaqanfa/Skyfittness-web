@@ -16,6 +16,7 @@ import ReportsPage from './pages/ReportsPage.jsx'
 import ManageStaffPage from './pages/ManageStaffPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import ComingSoonPage from './pages/ComingSoonPage.jsx'
+import MessageHistoryPage from './pages/MessageHistoryPage.jsx'
 
 export default function App() {
   return (
@@ -42,6 +43,8 @@ export default function App() {
         <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
         <Route path="/manage-staff" element={<ProtectedRoute><ManageStaffPage /></ProtectedRoute>} />
         <Route path="/more" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+        <Route path="/sms-history" element={<ProtectedRoute><MessageHistoryPage /></ProtectedRoute>} />
+        <Route path="/whatsapp-history" element={<ProtectedRoute><MessageHistoryPage /></ProtectedRoute>} />
         <Route path="/coming-soon" element={<ProtectedRoute><ComingSoonPage /></ProtectedRoute>} />
       </Routes>
     </div>
