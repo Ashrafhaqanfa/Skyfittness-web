@@ -70,8 +70,8 @@ export default function DashboardPage() {
         <h1 className="text-lg font-semibold">Skyfitness</h1>
         <div className="flex items-center gap-4">
           <Link to="/members/new" title="Add Member"><UserPlus size={20} /></Link>
-          <span title="SMS (not connected)"><MessageCircle size={20} /></span>
-          <span title="WhatsApp (not connected)"><Phone size={20} /></span>
+          <Link to="/sms-history" title="SMS History"><MessageCircle size={20} /></Link>
+          <Link to="/whatsapp-history" title="WhatsApp History"><Phone size={20} /></Link>
         </div>
       </div>
 
