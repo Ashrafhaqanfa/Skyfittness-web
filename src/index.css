@@ -14,7 +14,7 @@ body {
 /* Centers the app like a phone screen on wider (desktop) viewports,
    while filling the full width on an actual iPhone. */
 .app-shell {
-  max-width: 480px;
+  max-width: 428px;
   margin: 0 auto;
   min-height: 100vh;
   background: #F3F4F6;
