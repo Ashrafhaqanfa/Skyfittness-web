@@ -10,7 +10,7 @@ export default {
         },
       },
       maxWidth: {
-        phone: '480px',
+        phone: '428px',
       },
     },
   },
