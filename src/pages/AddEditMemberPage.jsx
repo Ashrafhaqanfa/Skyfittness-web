@@ -5,8 +5,11 @@ import TopBar from '../components/TopBar.jsx'
 import { useMembers, addMember, updateMember } from '../services/members.js'
 import { useCategoriesAndPlans, plansForCategory } from '../services/categoryPlans.js'
 
+// Standard durations available for every customer, regardless of whether
+// custom categories/plans have been set up yet.
 const STANDARD_DURATIONS = [
   { label: '1 Month', months: 1 },
+  { label: '2 Months', months: 2 },
   { label: '3 Months', months: 3 },
   { label: '6 Months', months: 6 },
   { label: '1 Year', months: 12 },
@@ -79,11 +82,11 @@ export default function AddEditMemberPage() {
   }
 
   function applyDuration(months) {
-  const start = form.joinDate ? new Date(form.joinDate) : new Date()
-  const expiry = new Date(start)
-  expiry.setMonth(expiry.getMonth() + months)
-  set('expiryDate', expiry.toISOString().slice(0, 10))
-}
+    const start = form.joinDate ? new Date(form.joinDate) : new Date()
+    const expiry = new Date(start)
+    expiry.setMonth(expiry.getMonth() + months)
+    set('expiryDate', expiry.toISOString().slice(0, 10))
+  }
 
   function handleFile(setter, e) {
     const file = e.target.files?.[0]
@@ -176,7 +179,24 @@ export default function AddEditMemberPage() {
             <span className="text-xs text-gray-400">available</span>
           </div>
           <Field placeholder="Name" value={form.name} onChange={(v) => set('name', v)} required />
-          <Field placeholder="Address" value={form.address} onChange={(v) => set('address', v)} />
+
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">Plan Duration</p>
+            <div className="grid grid-cols-5 gap-1.5">
+              {STANDARD_DURATIONS.map((d) => (
+                <button
+                  key={d.months}
+                  type="button"
+                  onClick={() => applyDuration(d.months)}
+                  className="border border-gray-200 rounded-xl py-2 text-[11px] font-semibold text-gray-700 active:bg-accent-light active:text-accent active:border-accent"
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Field placeholder="Address (optional)" value={form.address} onChange={(v) => set('address', v)} />
 
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-500">Gender</span>
@@ -203,12 +223,12 @@ export default function AddEditMemberPage() {
 
           <div className="flex gap-2">
             <DateField value={form.dateOfBirth} onChange={(v) => set('dateOfBirth', v)} placeholder="Date Of Birth" />
-            <Field placeholder="Goal" value={form.goal} onChange={(v) => set('goal', v)} />
+            <Field placeholder="Goal (optional)" value={form.goal} onChange={(v) => set('goal', v)} />
           </div>
 
           <div className="flex gap-2">
-            <Field placeholder="Height (cm)" value={form.heightCm} onChange={(v) => set('heightCm', v)} type="number" />
-            <Field placeholder="Weight (kg)" value={form.weightKg} onChange={(v) => set('weightKg', v)} type="number" />
+            <Field placeholder="Height in cm (optional)" value={form.heightCm} onChange={(v) => set('heightCm', v)} type="number" />
+            <Field placeholder="Weight in kg (optional)" value={form.weightKg} onChange={(v) => set('weightKg', v)} type="number" />
           </div>
 
           <label className="flex items-start gap-2">
@@ -224,21 +244,7 @@ export default function AddEditMemberPage() {
         <Disclosure title="Plan Details" open={planSectionOpen} onToggle={() => setPlanSectionOpen((v) => !v)}>
           {categories.length === 0 ? (
             <p className="text-xs text-gray-500">
-            <div>
-  <p className="text-xs text-gray-500 mb-1.5">Duration</p>
-  <div className="grid grid-cols-4 gap-2">
-    {STANDARD_DURATIONS.map((d) => (
-      <button
-        key={d.months}
-        type="button"
-        onClick={() => applyDuration(d.months)}
-        className="border border-gray-200 rounded-xl py-2 text-xs font-semibold text-gray-700 active:bg-accent-light active:text-accent active:border-accent"
-      >
-        {d.label}
-      </button>
-    ))}
-  </div>
-</div>
+              No categories yet — go to More → Setup → Load sample categories & plans.
             </p>
           ) : (
             <>
@@ -296,14 +302,14 @@ export default function AddEditMemberPage() {
             <option value="">Batch</option>
             {['Morning', 'Afternoon', 'Evening', 'General'].map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
-          <DateField value={form.marriageAnniversary} onChange={(v) => set('marriageAnniversary', v)} placeholder="Marriage Anniversary" />
-          <Field placeholder="Email" value={form.email} onChange={(v) => set('email', v)} type="email" />
-          <Field placeholder="Home Phone" value={form.homePhone} onChange={(v) => set('homePhone', v)} type="tel" />
-          <Field placeholder="Care Of (c/o)" value={form.careOf} onChange={(v) => set('careOf', v)} />
-          <Field placeholder="Unique ID Number" value={form.uniqueIdNumber} onChange={(v) => set('uniqueIdNumber', v)} />
-          <Field placeholder="Place of Work / Company Name" value={form.companyName} onChange={(v) => set('companyName', v)} />
-          <Field placeholder="Company GST" value={form.companyGST} onChange={(v) => set('companyGST', v)} />
-          <Field placeholder="Remark" value={form.remark} onChange={(v) => set('remark', v)} />
+          <DateField value={form.marriageAnniversary} onChange={(v) => set('marriageAnniversary', v)} placeholder="Marriage Anniversary (optional)" />
+          <Field placeholder="Email (optional)" value={form.email} onChange={(v) => set('email', v)} type="email" />
+          <Field placeholder="Home Phone (optional)" value={form.homePhone} onChange={(v) => set('homePhone', v)} type="tel" />
+          <Field placeholder="Care Of / c-o (optional)" value={form.careOf} onChange={(v) => set('careOf', v)} />
+          <Field placeholder="Unique ID Number (optional)" value={form.uniqueIdNumber} onChange={(v) => set('uniqueIdNumber', v)} />
+          <Field placeholder="Place of Work or Company Name (optional)" value={form.companyName} onChange={(v) => set('companyName', v)} />
+          <Field placeholder="Company GST (optional)" value={form.companyGST} onChange={(v) => set('companyGST', v)} />
+          <Field placeholder="Remark (optional)" value={form.remark} onChange={(v) => set('remark', v)} />
         </Disclosure>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
