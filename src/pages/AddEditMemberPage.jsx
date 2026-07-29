@@ -38,6 +38,7 @@ export default function AddEditMemberPage() {
   const [docPreviews, setDocPreviews] = useState([null, null, null])
   const [planSectionOpen, setPlanSectionOpen] = useState(true)
   const [otherSectionOpen, setOtherSectionOpen] = useState(false)
+  const [selectedDuration, setSelectedDuration] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -86,6 +87,7 @@ export default function AddEditMemberPage() {
     const expiry = new Date(start)
     expiry.setMonth(expiry.getMonth() + months)
     set('expiryDate', expiry.toISOString().slice(0, 10))
+    setSelectedDuration(months)
   }
 
   function handleFile(setter, e) {
@@ -183,17 +185,29 @@ export default function AddEditMemberPage() {
           <div>
             <p className="text-xs text-gray-500 mb-1.5">Plan Duration</p>
             <div className="grid grid-cols-5 gap-1.5">
-              {STANDARD_DURATIONS.map((d) => (
-                <button
-                  key={d.months}
-                  type="button"
-                  onClick={() => applyDuration(d.months)}
-                  className="border border-gray-200 rounded-xl py-2 text-[11px] font-semibold text-gray-700 active:bg-accent-light active:text-accent active:border-accent"
-                >
-                  {d.label}
-                </button>
-              ))}
+              {STANDARD_DURATIONS.map((d) => {
+                const isSelected = selectedDuration === d.months
+                return (
+                  <button
+                    key={d.months}
+                    type="button"
+                    onClick={() => applyDuration(d.months)}
+                    className={`border rounded-xl py-2 text-[11px] font-semibold transition-colors ${
+                      isSelected
+                        ? 'bg-accent text-white border-accent'
+                        : 'border-gray-200 text-gray-700 active:bg-accent-light active:text-accent active:border-accent'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                )
+              })}
             </div>
+            {selectedDuration && (
+              <p className="text-xs text-accent font-medium mt-1.5">
+                Selected: {STANDARD_DURATIONS.find((d) => d.months === selectedDuration)?.label}
+              </p>
+            )}
           </div>
 
           <Field placeholder="Address (optional)" value={form.address} onChange={(v) => set('address', v)} />
