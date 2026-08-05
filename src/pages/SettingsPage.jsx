@@ -36,9 +36,12 @@ export default function SettingsPage() {
 
   return (
     <div className="pb-4">
-      <div className="bg-accent text-white px-4 py-3">
-        <h1 className="text-lg font-semibold">More</h1>
-      </div>
+      <div
+  className="bg-accent text-white px-4 pb-3"
+  style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}
+>
+  <h1 className="text-lg font-semibold">More</h1>
+</div>
 
       {currentAdmin && (
         <div className="p-4 flex items-center gap-3 bg-white mb-2">
