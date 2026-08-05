@@ -66,7 +66,10 @@ export default function DashboardPage() {
 
   return (
     <div className="pb-4">
-      <div className="bg-accent text-white px-4 py-3 flex items-center justify-between">
+    <div
+  className="bg-accent text-white px-4 pb-3 flex items-center justify-between"
+  style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}
+>
         <h1 className="text-lg font-semibold">Skyfitness</h1>
         <div className="flex items-center gap-4">
           <Link to="/members/new" title="Add Member"><UserPlus size={20} /></Link>
