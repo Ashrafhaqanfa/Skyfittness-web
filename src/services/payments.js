@@ -1,6 +1,7 @@
 // src/services/payments.js
 //
 // Ports Services/PaymentService.swift. Firestore collection: "payments"
+// Scoped to the current account's ownerId, same pattern as members.js.
 
 import { useEffect, useState } from 'react'
 import {
@@ -10,9 +11,11 @@ import {
   writeBatch,
   onSnapshot,
   query,
+  where,
   orderBy,
 } from 'firebase/firestore'
 import { db } from '../firebase.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import { toDate, mapDoc } from './firestoreUtils.js'
 
 function normalizePayment(raw) {
@@ -20,11 +23,21 @@ function normalizePayment(raw) {
 }
 
 export function usePayments() {
+  const { ownerId } = useAuth()
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const q = query(collection(db, 'payments'), orderBy('paymentDate', 'desc'))
+    if (!ownerId) {
+      setPayments([])
+      setLoading(false)
+      return
+    }
+    const q = query(
+      collection(db, 'payments'),
+      where('ownerId', '==', ownerId),
+      orderBy('paymentDate', 'desc')
+    )
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -34,15 +47,12 @@ export function usePayments() {
       () => setLoading(false)
     )
     return unsubscribe
-  }, [])
+  }, [ownerId])
 
   return { payments, loading }
 }
 
-/// Records a payment AND reduces the member's due amount in a single atomic write
-/// (matches PaymentService.swift's `recordPayment`). Returns the saved payment
-/// (with its Firestore id set) so a receipt can be generated right after.
-export async function recordPayment({ memberId, amount, mode, collectedBy, currentDueAmount }) {
+export async function recordPayment({ memberId, amount, mode, collectedBy, currentDueAmount, ownerId }) {
   const batch = writeBatch(db)
 
   const paymentRef = doc(collection(db, 'payments'))
@@ -53,6 +63,7 @@ export async function recordPayment({ memberId, amount, mode, collectedBy, curre
     mode,
     collectedBy: collectedBy || null,
     paymentDate,
+    ownerId,
   })
 
   const memberRef = doc(db, 'members', memberId)
