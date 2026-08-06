@@ -1,4 +1,8 @@
 // src/context/AuthContext.jsx
+//
+// Simplified: no staff/trainer accounts, no Cloud Function needed. Every
+// signed-in user's data is scoped by their own uid — matches the simpler
+// Firestore rules (ownerId == request.auth.uid, everywhere).
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
@@ -22,86 +26,45 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user)
-
       if (user) {
         try {
-          const adminRef = doc(db, 'admins', user.uid)
-          const adminSnap = await getDoc(adminRef)
-
-          if (adminSnap.exists()) {
-            setCurrentAdmin({
-              id: adminSnap.id,
-              ...adminSnap.data(),
-            })
-          } else {
-            // Create admin document automatically for every new user
-            const adminData = {
-              name: user.displayName || '',
-              loginEmail: user.email,
-              ownerId: user.uid,
-              createdAt: new Date(),
-            }
-
-            await setDoc(adminRef, adminData)
-
-            setCurrentAdmin({
-              id: user.uid,
-              ...adminData,
-            })
-          }
-        } catch (err) {
-          console.error(err)
+          const snap = await getDoc(doc(db, 'admins', user.uid))
+          setCurrentAdmin(snap.exists() ? { id: snap.id, ...snap.data() } : null)
+        } catch {
           setCurrentAdmin(null)
         }
       } else {
         setCurrentAdmin(null)
       }
-
       setAuthReady(true)
     })
-
     return unsubscribe
   }, [])
 
   async function signIn(email, password) {
     setIsLoading(true)
     setErrorMessage(null)
-
     try {
       await signInWithEmailAndPassword(auth, email, password)
     } catch (error) {
       setErrorMessage(friendlyAuthError(error))
     }
-
     setIsLoading(false)
   }
 
   async function signUp(name, email, password) {
     setIsLoading(true)
     setErrorMessage(null)
-
     try {
-      const result = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      )
-
-      const adminData = {
+      const result = await createUserWithEmailAndPassword(auth, email, password)
+      await setDoc(doc(db, 'admins', result.user.uid), {
         name,
+        role: 'owner',
         loginEmail: email,
-        ownerId: result.user.uid,
-        createdAt: new Date(),
-      }
-
-      await setDoc(
-        doc(db, 'admins', result.user.uid),
-        adminData
-      )
+      })
     } catch (error) {
       setErrorMessage(friendlyAuthError(error))
     }
-
     setIsLoading(false)
   }
 
@@ -109,8 +72,7 @@ export function AuthProvider({ children }) {
     firebaseSignOut(auth)
   }
 
-  // Every user owns only their own data
-  const ownerId = currentUser?.uid ?? null
+  const ownerId = currentUser?.uid || null
 
   const value = {
     currentUser,
@@ -126,11 +88,7 @@ export function AuthProvider({ children }) {
     signOut,
   }
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
@@ -139,26 +97,17 @@ export function useAuth() {
 
 function friendlyAuthError(error) {
   const code = error?.code || ''
-
-  if (
-    code.includes('invalid-credential') ||
-    code.includes('wrong-password') ||
-    code.includes('user-not-found')
-  ) {
-    return 'Incorrect email or password.'
+  if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) {
+    return 'Incorrect email or password, or this account does not exist yet.'
   }
-
   if (code.includes('email-already-in-use')) {
-    return 'This email is already registered.'
+    return 'An account with this email already exists — try signing in instead.'
   }
-
   if (code.includes('weak-password')) {
     return 'Password should be at least 6 characters.'
   }
-
   if (code.includes('invalid-email')) {
     return 'Please enter a valid email address.'
   }
-
-  return error?.message || 'Something went wrong.'
+  return error?.message || 'Something went wrong. Please try again.'
 }
