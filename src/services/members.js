@@ -120,6 +120,18 @@ export function todaysBirthdays(members) {
 export function todaysAnniversaries(members) {
   return members.filter(isAnniversaryToday)
 }
+// Maps the actual gap between joinDate and expiryDate to one of the 4
+// standard plan labels used on receipts — works automatically whether the
+// duration was set via the Plan Duration quick-buttons or by hand-picking
+// dates, since it doesn't depend on any separately stored "duration" field.
+export function derivePlanLabel(member) {
+  if (!member.joinDate || !member.expiryDate) return 'Custom'
+  const days = Math.round((member.expiryDate - member.joinDate) / 86400000)
+  if (days <= 35) return 'Monthly'
+  if (days <= 100) return 'Three Months'
+  if (days <= 200) return 'Six Months'
+  return 'Yearly'
+}
 export function totalDueAmount(members) {
   return members.reduce((sum, m) => sum + (m.dueAmount || 0), 0)
 }
