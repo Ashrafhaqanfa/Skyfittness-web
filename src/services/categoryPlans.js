@@ -1,12 +1,20 @@
 // src/services/categoryPlans.js
+
 import { useEffect, useState } from 'react'
-import { collection, addDoc, onSnapshot, query, where } from 'firebase/firestore'
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  query,
+  where,
+} from 'firebase/firestore'
 import { db } from '../firebase.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { mapDoc } from './firestoreUtils.js'
 
 export function useCategoriesAndPlans() {
   const { ownerId } = useAuth()
+
   const [categories, setCategories] = useState([])
   const [plans, setPlans] = useState([])
 
@@ -16,42 +24,152 @@ export function useCategoriesAndPlans() {
       setPlans([])
       return
     }
-    const catQ = query(collection(db, 'categories'), where('ownerId', '==', ownerId))
-    const planQ = query(collection(db, 'plans'), where('ownerId', '==', ownerId))
-    const unsubCat = onSnapshot(catQ, (s) => setCategories(s.docs.map(mapDoc)))
-    const unsubPlan = onSnapshot(planQ, (s) => setPlans(s.docs.map(mapDoc)))
+
+    const categoryQuery = query(
+      collection(db, 'categories'),
+      where('ownerId', '==', ownerId)
+    )
+
+    const planQuery = query(
+      collection(db, 'plans'),
+      where('ownerId', '==', ownerId)
+    )
+
+    const unsubscribeCategories = onSnapshot(
+      categoryQuery,
+      (snapshot) => {
+        setCategories(snapshot.docs.map(mapDoc))
+      },
+      console.error
+    )
+
+    const unsubscribePlans = onSnapshot(
+      planQuery,
+      (snapshot) => {
+        setPlans(snapshot.docs.map(mapDoc))
+      },
+      console.error
+    )
+
     return () => {
-      unsubCat()
-      unsubPlan()
+      unsubscribeCategories()
+      unsubscribePlans()
     }
   }, [ownerId])
 
-  return { categories, plans }
+  return {
+    categories,
+    plans,
+  }
 }
 
 export function plansForCategory(plans, categoryId) {
-  return plans.filter((p) => p.categoryId === categoryId)
+  return plans.filter(
+    (plan) => plan.categoryId === categoryId
+  )
 }
 
 export async function addCategory(name, ownerId) {
-  return addDoc(collection(db, 'categories'), { name, ownerId })
+  return addDoc(collection(db, 'categories'), {
+    name,
+    ownerId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
 }
 
-export async function addPlan({ categoryId, name, durationDays, price }, ownerId) {
-  return addDoc(collection(db, 'plans'), { categoryId, name, durationDays, price, ownerId })
+export async function addPlan(
+  {
+    categoryId,
+    name,
+    durationDays,
+    price,
+  },
+  ownerId
+) {
+  return addDoc(collection(db, 'plans'), {
+    categoryId,
+    name,
+    durationDays: Number(durationDays),
+    price: Number(price),
+    ownerId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
 }
 
-export async function seedSampleDataIfNeeded(categories, ownerId) {
+export async function seedSampleDataIfNeeded(
+  categories,
+  ownerId
+) {
+  if (!ownerId) return
+
   if (categories.length > 0) return
-  const exercise = await addDoc(collection(db, 'categories'), { name: 'Exercise', ownerId })
-  const weightLoss = await addDoc(collection(db, 'categories'), { name: 'Weight Loss', ownerId })
-  const yoga = await addDoc(collection(db, 'categories'), { name: 'Yoga', ownerId })
+
+  const exercise = await addCategory(
+    'Exercise',
+    ownerId
+  )
+
+  const weightLoss = await addCategory(
+    'Weight Loss',
+    ownerId
+  )
+
+  const yoga = await addCategory(
+    'Yoga',
+    ownerId
+  )
 
   await Promise.all([
-    addDoc(collection(db, 'plans'), { categoryId: exercise.id, name: '1-Month Standard', durationDays: 30, price: 1500, ownerId }),
-    addDoc(collection(db, 'plans'), { categoryId: exercise.id, name: '3-Month Gold', durationDays: 90, price: 4000, ownerId }),
-    addDoc(collection(db, 'plans'), { categoryId: exercise.id, name: '12-Month Elite', durationDays: 365, price: 14000, ownerId }),
-    addDoc(collection(db, 'plans'), { categoryId: weightLoss.id, name: '6-Month Program', durationDays: 180, price: 8000, ownerId }),
-    addDoc(collection(db, 'plans'), { categoryId: yoga.id, name: '1-Month Yoga', durationDays: 30, price: 1200, ownerId }),
+    addPlan(
+      {
+        categoryId: exercise.id,
+        name: '1-Month Standard',
+        durationDays: 30,
+        price: 1500,
+      },
+      ownerId
+    ),
+
+    addPlan(
+      {
+        categoryId: exercise.id,
+        name: '3-Month Gold',
+        durationDays: 90,
+        price: 4000,
+      },
+      ownerId
+    ),
+
+    addPlan(
+      {
+        categoryId: exercise.id,
+        name: '12-Month Elite',
+        durationDays: 365,
+        price: 14000,
+      },
+      ownerId
+    ),
+
+    addPlan(
+      {
+        categoryId: weightLoss.id,
+        name: '6-Month Program',
+        durationDays: 180,
+        price: 8000,
+      },
+      ownerId
+    ),
+
+    addPlan(
+      {
+        categoryId: yoga.id,
+        name: '1-Month Yoga',
+        durationDays: 30,
+        price: 1200,
+      },
+      ownerId
+    ),
   ])
 }
