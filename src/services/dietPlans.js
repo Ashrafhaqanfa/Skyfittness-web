@@ -1,14 +1,8 @@
 // src/services/dietPlans.js
-//
-// Ports Services/DietPlanService.swift. Firestore collection: "dietPlans"
-// NOTE: the original Swift service ordered by a field called "assignedDate"
-// that doesn't actually exist on the DietPlan model (it has "createdAt")  —
-// that looks like a pre-existing bug in the iOS app. This web version orders
-// by the field that's actually there: "createdAt".
-
 import { useEffect, useState } from 'react'
-import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../firebase.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import { toDate, mapDoc } from './firestoreUtils.js'
 
 function normalize(raw) {
@@ -16,21 +10,30 @@ function normalize(raw) {
 }
 
 export function useDietPlans() {
+  const { ownerId } = useAuth()
   const [dietPlans, setDietPlans] = useState([])
 
   useEffect(() => {
-    const q = query(collection(db, 'dietPlans'), orderBy('createdAt', 'desc'))
+    if (!ownerId) {
+      setDietPlans([])
+      return
+    }
+    const q = query(
+      collection(db, 'dietPlans'),
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc')
+    )
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setDietPlans(snapshot.docs.map((d) => normalize(mapDoc(d))))
     })
     return unsubscribe
-  }, [])
+  }, [ownerId])
 
   return { dietPlans }
 }
 
-export async function addDietPlan(plan) {
-  return addDoc(collection(db, 'dietPlans'), { ...plan, createdAt: new Date() })
+export async function addDietPlan(plan, ownerId) {
+  return addDoc(collection(db, 'dietPlans'), { ...plan, ownerId, createdAt: new Date() })
 }
 
 export async function deleteDietPlan(id) {
