@@ -2,6 +2,9 @@
 //
 // Ports Models/Member.swift + Services/MemberService.swift.
 // Firestore collection: "members"
+// Every query is scoped to the signed-in account's ownerId, and every write
+// stamps it — so members created under one gym owner never show up for a
+// different owner.
 
 import { useEffect, useState } from 'react'
 import {
@@ -12,9 +15,11 @@ import {
   doc,
   onSnapshot,
   query,
+  where,
   orderBy,
 } from 'firebase/firestore'
 import { db } from '../firebase.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import { toDate, mapDoc } from './firestoreUtils.js'
 
 function normalizeMember(raw) {
@@ -29,8 +34,6 @@ function normalizeMember(raw) {
     dueAmountReminderDate: toDate(raw.dueAmountReminderDate),
   }
 }
-
-// MARK: - Derived status logic (matches Member.swift exactly)
 
 export function daysUntilExpiry(member) {
   if (!member.expiryDate) return 0
@@ -69,14 +72,22 @@ export function isAnniversaryToday(member) {
   )
 }
 
-// MARK: - Realtime hook (ports @Published var members + startListening/stopListening)
-
 export function useMembers() {
+  const { ownerId } = useAuth()
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const q = query(collection(db, 'members'), orderBy('expiryDate'))
+    if (!ownerId) {
+      setMembers([])
+      setLoading(false)
+      return
+    }
+    const q = query(
+      collection(db, 'members'),
+      where('ownerId', '==', ownerId),
+      orderBy('expiryDate')
+    )
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -86,12 +97,10 @@ export function useMembers() {
       () => setLoading(false)
     )
     return unsubscribe
-  }, [])
+  }, [ownerId])
 
   return { members, loading }
 }
-
-// MARK: - Derived collections (ports MemberService.swift computed properties)
 
 export function liveMembers(members) {
   return members.filter((m) => m.status === 'live' && !isExpired(m))
@@ -115,16 +124,17 @@ export function totalDueAmount(members) {
   return members.reduce((sum, m) => sum + (m.dueAmount || 0), 0)
 }
 
-// MARK: - CRUD
+// CRUD — each takes ownerId as an explicit argument.
+// In a page component: const { ownerId } = useAuth(), then pass it through.
 
-export async function addMember(member) {
-  const payload = { ...member, createdAt: new Date(), updatedAt: new Date() }
+export async function addMember(member, ownerId) {
+  const payload = { ...member, ownerId, createdAt: new Date(), updatedAt: new Date() }
   delete payload.id
   return addDoc(collection(db, 'members'), payload)
 }
 
-export async function updateMember(id, member) {
-  const payload = { ...member, updatedAt: new Date() }
+export async function updateMember(id, member, ownerId) {
+  const payload = { ...member, ownerId, updatedAt: new Date() }
   delete payload.id
   return updateDoc(doc(db, 'members', id), payload)
 }
