@@ -1,10 +1,4 @@
 // src/context/AuthContext.jsx
-//
-// Ports Services/AuthService.swift, PLUS adds multi-tenant data isolation:
-// every admin now has an "ownerId" — for an owner account, that's their own
-// uid; for staff/trainer accounts, it's whichever owner created them. Every
-// other service (members, payments, etc.) filters and stamps records using
-// this value, so accounts never see each other's data.
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
@@ -28,46 +22,86 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user)
+
       if (user) {
         try {
-          const snap = await getDoc(doc(db, 'admins', user.uid))
-          setCurrentAdmin(snap.exists() ? { id: snap.id, ...snap.data() } : null)
-        } catch {
+          const adminRef = doc(db, 'admins', user.uid)
+          const adminSnap = await getDoc(adminRef)
+
+          if (adminSnap.exists()) {
+            setCurrentAdmin({
+              id: adminSnap.id,
+              ...adminSnap.data(),
+            })
+          } else {
+            // Create admin document automatically for every new user
+            const adminData = {
+              name: user.displayName || '',
+              loginEmail: user.email,
+              ownerId: user.uid,
+              createdAt: new Date(),
+            }
+
+            await setDoc(adminRef, adminData)
+
+            setCurrentAdmin({
+              id: user.uid,
+              ...adminData,
+            })
+          }
+        } catch (err) {
+          console.error(err)
           setCurrentAdmin(null)
         }
       } else {
         setCurrentAdmin(null)
       }
+
       setAuthReady(true)
     })
+
     return unsubscribe
   }, [])
 
   async function signIn(email, password) {
     setIsLoading(true)
     setErrorMessage(null)
+
     try {
       await signInWithEmailAndPassword(auth, email, password)
     } catch (error) {
       setErrorMessage(friendlyAuthError(error))
     }
+
     setIsLoading(false)
   }
 
-  async function signUp(name, email, password, role = 'owner') {
+  async function signUp(name, email, password) {
     setIsLoading(true)
     setErrorMessage(null)
+
     try {
-      const result = await createUserWithEmailAndPassword(auth, email, password)
-      await setDoc(doc(db, 'admins', result.user.uid), {
+      const result = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      )
+
+      const adminData = {
         name,
-        role,
         loginEmail: email,
         ownerId: result.user.uid,
-      })
+        createdAt: new Date(),
+      }
+
+      await setDoc(
+        doc(db, 'admins', result.user.uid),
+        adminData
+      )
     } catch (error) {
       setErrorMessage(friendlyAuthError(error))
     }
+
     setIsLoading(false)
   }
 
@@ -75,12 +109,8 @@ export function AuthProvider({ children }) {
     firebaseSignOut(auth)
   }
 
-  // The id that scopes ALL of this account's data. For an owner, it's their
-  // own uid. For staff/trainer, it's the ownerId their admin doc was stamped
-  // with when the owner created their account (see services/admins.js).
-  const ownerId = currentAdmin
-    ? (currentAdmin.role === 'owner' ? currentUser?.uid : currentAdmin.ownerId)
-    : null
+  // Every user owns only their own data
+  const ownerId = currentUser?.uid ?? null
 
   const value = {
     currentUser,
@@ -96,7 +126,11 @@ export function AuthProvider({ children }) {
     signOut,
   }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {
@@ -105,17 +139,26 @@ export function useAuth() {
 
 function friendlyAuthError(error) {
   const code = error?.code || ''
-  if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) {
-    return 'Incorrect email or password, or this account does not exist yet.'
+
+  if (
+    code.includes('invalid-credential') ||
+    code.includes('wrong-password') ||
+    code.includes('user-not-found')
+  ) {
+    return 'Incorrect email or password.'
   }
+
   if (code.includes('email-already-in-use')) {
-    return 'An account with this email already exists — try signing in instead.'
+    return 'This email is already registered.'
   }
+
   if (code.includes('weak-password')) {
     return 'Password should be at least 6 characters.'
   }
+
   if (code.includes('invalid-email')) {
     return 'Please enter a valid email address.'
   }
-  return error?.message || 'Something went wrong. Please try again.'
+
+  return error?.message || 'Something went wrong.'
 }
