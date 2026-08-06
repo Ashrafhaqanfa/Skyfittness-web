@@ -4,6 +4,7 @@ import { UserRound, Camera, ChevronUp, ChevronDown } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import { useMembers, addMember, updateMember } from '../services/members.js'
 import { useCategoriesAndPlans, plansForCategory } from '../services/categoryPlans.js'
+import { useAuth } from '../context/AuthContext.jsx
 
 // Standard durations available for every customer, regardless of whether
 // custom categories/plans have been set up yet.
@@ -41,6 +42,7 @@ export default function AddEditMemberPage() {
   const [selectedDuration, setSelectedDuration] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const { ownerId } = useAuth()
 
   useEffect(() => {
     if (!isEdit) return
