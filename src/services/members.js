@@ -16,7 +16,6 @@ import {
   onSnapshot,
   query,
   where,
-  orderBy,
 } from 'firebase/firestore'
 import { db } from '../firebase.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -85,16 +84,17 @@ export function useMembers() {
     }
     const q = query(
       collection(db, 'members'),
-      where('ownerId', '==', ownerId),
-      orderBy('expiryDate')
+      where('ownerId', '==', ownerId)
     )
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        setMembers(snapshot.docs.map((d) => normalizeMember(mapDoc(d))))
+        const list = snapshot.docs.map((d) => normalizeMember(mapDoc(d)))
+        list.sort((a, b) => (a.expiryDate?.getTime() || 0) - (b.expiryDate?.getTime() || 0))
+        setMembers(list)
         setLoading(false)
       },
-      () => setLoading(false)
+      (err) => { console.error('members query failed:', err); setLoading(false) }
     )
     return unsubscribe
   }, [ownerId])
@@ -120,10 +120,6 @@ export function todaysBirthdays(members) {
 export function todaysAnniversaries(members) {
   return members.filter(isAnniversaryToday)
 }
-// Maps the actual gap between joinDate and expiryDate to one of the 4
-// standard plan labels used on receipts — works automatically whether the
-// duration was set via the Plan Duration quick-buttons or by hand-picking
-// dates, since it doesn't depend on any separately stored "duration" field.
 export function derivePlanLabel(member) {
   if (!member.joinDate || !member.expiryDate) return 'Custom'
   const days = Math.round((member.expiryDate - member.joinDate) / 86400000)
@@ -135,9 +131,6 @@ export function derivePlanLabel(member) {
 export function totalDueAmount(members) {
   return members.reduce((sum, m) => sum + (m.dueAmount || 0), 0)
 }
-
-// CRUD — each takes ownerId as an explicit argument.
-// In a page component: const { ownerId } = useAuth(), then pass it through.
 
 export async function addMember(member, ownerId) {
   const payload = { ...member, ownerId, createdAt: new Date(), updatedAt: new Date() }
