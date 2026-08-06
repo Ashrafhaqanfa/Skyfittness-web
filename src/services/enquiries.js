@@ -1,19 +1,10 @@
 // src/services/enquiries.js
-//
-// Ports Services/EnquiryService.swift. Firestore collection: "enquiries"
-
 import { useEffect, useState } from 'react'
 import {
-  collection,
-  addDoc,
-  setDoc,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  orderBy,
+  collection, addDoc, setDoc, deleteDoc, doc, onSnapshot, query, where, orderBy,
 } from 'firebase/firestore'
 import { db } from '../firebase.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import { toDate, mapDoc } from './firestoreUtils.js'
 
 function normalize(raw) {
@@ -26,11 +17,21 @@ function normalize(raw) {
 }
 
 export function useEnquiries() {
+  const { ownerId } = useAuth()
   const [enquiries, setEnquiries] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const q = query(collection(db, 'enquiries'), orderBy('createdAt', 'desc'))
+    if (!ownerId) {
+      setEnquiries([])
+      setLoading(false)
+      return
+    }
+    const q = query(
+      collection(db, 'enquiries'),
+      where('ownerId', '==', ownerId),
+      orderBy('createdAt', 'desc')
+    )
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -40,17 +41,17 @@ export function useEnquiries() {
       () => setLoading(false)
     )
     return unsubscribe
-  }, [])
+  }, [ownerId])
 
   return { enquiries, loading }
 }
 
-export async function addEnquiry(enquiry) {
-  return addDoc(collection(db, 'enquiries'), { ...enquiry, createdAt: new Date() })
+export async function addEnquiry(enquiry, ownerId) {
+  return addDoc(collection(db, 'enquiries'), { ...enquiry, ownerId, createdAt: new Date() })
 }
 
-export async function updateEnquiry(id, enquiry) {
-  return setDoc(doc(db, 'enquiries', id), enquiry, { merge: true })
+export async function updateEnquiry(id, enquiry, ownerId) {
+  return setDoc(doc(db, 'enquiries', id), { ...enquiry, ownerId }, { merge: true })
 }
 
 export async function deleteEnquiry(id) {
