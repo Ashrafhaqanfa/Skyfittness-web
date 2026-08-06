@@ -1,7 +1,10 @@
 // src/context/AuthContext.jsx
 //
-// Ports Services/AuthService.swift: email/password auth + the matching
-// "admins" Firestore profile doc (name, role, loginEmail).
+// Ports Services/AuthService.swift, PLUS adds multi-tenant data isolation:
+// every admin now has an "ownerId" — for an owner account, that's their own
+// uid; for staff/trainer accounts, it's whichever owner created them. Every
+// other service (members, payments, etc.) filters and stamps records using
+// this value, so accounts never see each other's data.
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
@@ -51,8 +54,6 @@ export function AuthProvider({ children }) {
     setIsLoading(false)
   }
 
-  // Use once to create the first owner account. Afterwards, create staff/trainer
-  // accounts from the Manage Staff screen instead of exposing signup publicly.
   async function signUp(name, email, password, role = 'owner') {
     setIsLoading(true)
     setErrorMessage(null)
@@ -62,6 +63,7 @@ export function AuthProvider({ children }) {
         name,
         role,
         loginEmail: email,
+        ownerId: result.user.uid,
       })
     } catch (error) {
       setErrorMessage(friendlyAuthError(error))
@@ -73,9 +75,17 @@ export function AuthProvider({ children }) {
     firebaseSignOut(auth)
   }
 
+  // The id that scopes ALL of this account's data. For an owner, it's their
+  // own uid. For staff/trainer, it's the ownerId their admin doc was stamped
+  // with when the owner created their account (see services/admins.js).
+  const ownerId = currentAdmin
+    ? (currentAdmin.role === 'owner' ? currentUser?.uid : currentAdmin.ownerId)
+    : null
+
   const value = {
     currentUser,
     currentAdmin,
+    ownerId,
     authReady,
     isLoading,
     errorMessage,
