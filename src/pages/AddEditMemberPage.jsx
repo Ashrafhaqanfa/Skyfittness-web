@@ -4,7 +4,7 @@ import { UserRound, Camera, ChevronUp, ChevronDown } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import { useMembers, addMember, updateMember } from '../services/members.js'
 import { useCategoriesAndPlans, plansForCategory } from '../services/categoryPlans.js'
-import { useAuth } from '../context/AuthContext.jsx
+import { useAuth } from '../context/AuthContext.jsx'
 
 // Standard durations available for every customer, regardless of whether
 // custom categories/plans have been set up yet.
@@ -140,9 +140,9 @@ export default function AddEditMemberPage() {
         remark: form.remark || null,
       }
       if (isEdit) {
-        await updateMember(id, payload)
+        await updateMember(id, payload, ownerId)
       } else {
-        await addMember(payload)
+        await addMember(payload, ownerId)
       }
       navigate(-1)
     } catch (err) {
