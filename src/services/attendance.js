@@ -1,22 +1,11 @@
 // src/services/attendance.js
-//
-// Ports Services/AttendanceService.swift. Firestore collection: "attendance"
-
 import { useEffect, useState } from 'react'
 import {
-  collection,
-  addDoc,
-  deleteDoc,
-  doc,
-  getDocs,
-  onSnapshot,
-  query,
-  where,
-  orderBy,
-  limit,
-  Timestamp,
+  collection, addDoc, deleteDoc, doc, getDocs, onSnapshot,
+  query, where, orderBy, limit, Timestamp,
 } from 'firebase/firestore'
 import { db } from '../firebase.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import { toDate, mapDoc } from './firestoreUtils.js'
 
 function normalize(raw) {
@@ -24,10 +13,16 @@ function normalize(raw) {
 }
 
 export function useTodaysAttendance() {
+  const { ownerId } = useAuth()
   const [todaysAttendance, setTodaysAttendance] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!ownerId) {
+      setTodaysAttendance([])
+      setLoading(false)
+      return
+    }
     const startOfDay = new Date()
     startOfDay.setHours(0, 0, 0, 0)
     const endOfDay = new Date(startOfDay)
@@ -35,6 +30,7 @@ export function useTodaysAttendance() {
 
     const q = query(
       collection(db, 'attendance'),
+      where('ownerId', '==', ownerId),
       where('date', '>=', Timestamp.fromDate(startOfDay)),
       where('date', '<', Timestamp.fromDate(endOfDay)),
       orderBy('date', 'desc')
@@ -48,7 +44,7 @@ export function useTodaysAttendance() {
       () => setLoading(false)
     )
     return unsubscribe
-  }, [])
+  }, [ownerId])
 
   return { todaysAttendance, loading }
 }
@@ -57,10 +53,10 @@ export function hasCheckedInToday(todaysAttendance, memberId) {
   return todaysAttendance.some((a) => a.memberId === memberId)
 }
 
-export async function checkIn(memberId, todaysAttendance) {
+export async function checkIn(memberId, todaysAttendance, ownerId) {
   if (hasCheckedInToday(todaysAttendance, memberId)) return
   const now = new Date()
-  return addDoc(collection(db, 'attendance'), { memberId, date: now, checkInTime: now })
+  return addDoc(collection(db, 'attendance'), { memberId, date: now, checkInTime: now, ownerId })
 }
 
 export async function undoCheckIn(todaysAttendance, memberId) {
@@ -69,9 +65,10 @@ export async function undoCheckIn(todaysAttendance, memberId) {
   return deleteDoc(doc(db, 'attendance', record.id))
 }
 
-export async function fetchHistory(memberId) {
+export async function fetchHistory(memberId, ownerId) {
   const q = query(
     collection(db, 'attendance'),
+    where('ownerId', '==', ownerId),
     where('memberId', '==', memberId),
     orderBy('date', 'desc'),
     limit(30)
