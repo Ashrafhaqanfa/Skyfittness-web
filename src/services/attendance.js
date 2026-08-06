@@ -1,35 +1,32 @@
 // src/services/attendance.js
+//
+// Ports Services/AttendanceService.swift. Firestore collection: "attendance"
+// Filters ONLY by ownerId in Firestore (a single equality filter never needs
+// a composite index) — the "today" date range and sorting happen in
+// JavaScript instead, so this never silently fails on a missing index.
 
 import { useEffect, useState } from 'react'
-import {
-  collection,
-  addDoc,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  query,
-  where,
-  orderBy,
-  limit,
-  Timestamp,
-} from 'firebase/firestore'
+import { collection, addDoc, deleteDoc, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../firebase.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { toDate, mapDoc } from './firestoreUtils.js'
 
 function normalize(raw) {
-  return {
-    ...raw,
-    date: toDate(raw.date),
-    checkInTime: toDate(raw.checkInTime),
-  }
+  return { ...raw, date: toDate(raw.date), checkInTime: toDate(raw.checkInTime) }
+}
+
+function isToday(date) {
+  if (!date) return false
+  const now = new Date()
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  )
 }
 
 export function useTodaysAttendance() {
   const { ownerId } = useAuth()
-
   const [todaysAttendance, setTodaysAttendance] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -39,42 +36,23 @@ export function useTodaysAttendance() {
       setLoading(false)
       return
     }
-
-    const startOfDay = new Date()
-    startOfDay.setHours(0, 0, 0, 0)
-
-    const endOfDay = new Date(startOfDay)
-    endOfDay.setDate(endOfDay.getDate() + 1)
-
-    const q = query(
-      collection(db, "attendance"),
-      where("ownerId", "==", ownerId),
-      where("date", ">=", Timestamp.fromDate(startOfDay)),
-      where("date", "<", Timestamp.fromDate(endOfDay)),
-      orderBy("date", "desc")
-    )
-
+    const q = query(collection(db, 'attendance'), where('ownerId', '==', ownerId))
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        setTodaysAttendance(
-          snapshot.docs.map((doc) => normalize(mapDoc(doc)))
-        )
+        const list = snapshot.docs
+          .map((d) => normalize(mapDoc(d)))
+          .filter((a) => isToday(a.date))
+        list.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0))
+        setTodaysAttendance(list)
         setLoading(false)
       },
-      (err) => {
-        console.error(err)
-        setLoading(false)
-      }
+      (err) => { console.error('attendance query failed:', err); setLoading(false) }
     )
-
     return unsubscribe
   }, [ownerId])
 
-  return {
-    todaysAttendance,
-    loading,
-  }
+  return { todaysAttendance, loading }
 }
 
 export function hasCheckedInToday(todaysAttendance, memberId) {
@@ -82,85 +60,23 @@ export function hasCheckedInToday(todaysAttendance, memberId) {
 }
 
 export async function checkIn(memberId, todaysAttendance, ownerId) {
-  if (!ownerId) {
-    throw new Error("Owner not authenticated.")
-  }
-
-  if (hasCheckedInToday(todaysAttendance, memberId)) {
-    return
-  }
-
-  // Verify member ownership
-  const memberRef = doc(db, "members", memberId)
-  const memberSnap = await getDoc(memberRef)
-
-  if (!memberSnap.exists()) {
-    throw new Error("Member not found.")
-  }
-
-  const member = memberSnap.data()
-
-  if (member.ownerId !== ownerId) {
-    throw new Error("Unauthorized check-in.")
-  }
-
+  if (hasCheckedInToday(todaysAttendance, memberId)) return
   const now = new Date()
-
-  return addDoc(collection(db, "attendance"), {
-    ownerId,
-    memberId,
-    date: now,
-    checkInTime: now,
-    createdAt: now,
-  })
+  return addDoc(collection(db, 'attendance'), { memberId, date: now, checkInTime: now, ownerId })
 }
 
-export async function undoCheckIn(todaysAttendance, memberId, ownerId) {
-  const record = todaysAttendance.find(
-    (a) => a.memberId === memberId
-  )
-
-  if (!record) {
-    return
-  }
-
-  const attendanceRef = doc(db, "attendance", record.id)
-  const attendanceSnap = await getDoc(attendanceRef)
-
-  if (!attendanceSnap.exists()) {
-    return
-  }
-
-  if (attendanceSnap.data().ownerId !== ownerId) {
-    throw new Error("Unauthorized.")
-  }
-
-  await deleteDoc(attendanceRef)
+export async function undoCheckIn(todaysAttendance, memberId) {
+  const record = todaysAttendance.find((a) => a.memberId === memberId)
+  if (!record) return
+  return deleteDoc(doc(db, 'attendance', record.id))
 }
 
 export async function fetchHistory(memberId, ownerId) {
-  const memberRef = doc(db, "members", memberId)
-  const memberSnap = await getDoc(memberRef)
-
-  if (!memberSnap.exists()) {
-    throw new Error("Member not found.")
-  }
-
-  if (memberSnap.data().ownerId !== ownerId) {
-    throw new Error("Unauthorized.")
-  }
-
-  const q = query(
-    collection(db, "attendance"),
-    where("ownerId", "==", ownerId),
-    where("memberId", "==", memberId),
-    orderBy("date", "desc"),
-    limit(30)
-  )
-
+  const q = query(collection(db, 'attendance'), where('ownerId', '==', ownerId))
   const snapshot = await getDocs(q)
-
-  return snapshot.docs.map((doc) =>
-    normalize(mapDoc(doc))
-  )
+  const list = snapshot.docs
+    .map((d) => normalize(mapDoc(d)))
+    .filter((a) => a.memberId === memberId)
+  list.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0))
+  return list.slice(0, 30)
 }
