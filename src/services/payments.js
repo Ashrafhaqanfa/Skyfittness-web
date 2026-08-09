@@ -53,6 +53,7 @@ export function usePayments() {
 }
 
 export async function recordPayment({ memberId, amount, mode, collectedBy, currentDueAmount, ownerId }) {
+  if (!ownerId) throw new Error('Not signed in yet — please wait a moment and try again.')
   const batch = writeBatch(db)
 
   const paymentRef = doc(collection(db, 'payments'))
