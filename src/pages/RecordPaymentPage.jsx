@@ -1,25 +1,25 @@
 // src/pages/RecordPaymentPage.jsx
 //
 // Ports Views/RecordPaymentView.swift — after a payment is saved, a PDF
-// receipt is generated automatically and offered for download/share
-// (the browser's native Share Sheet on supporting devices, e.g. iOS Safari)
-// before the screen closes.
+// receipt is generated automatically (SKYFITNESS invoice-style, see
+// services/receipts.js) and offered for download/share before the screen
+// closes.
 
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
+import { Download } from 'lucide-react'
+import { useAuth } from '../context/AuthContext.jsx'
 import { useMembers } from '../services/members.js'
 import { recordPayment } from '../services/payments.js'
 import { generateReceiptPDF } from '../services/receipts.js'
-import { useGymName } from '../hooks/useGymName.js'
-import { Download } from 'lucide-react'
 
 export default function RecordPaymentPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { ownerId } = useAuth()
   const { members } = useMembers()
   const member = members.find((m) => m.id === id)
-  const [gymName] = useGymName()
 
   const [amount, setAmount] = useState('')
   const [mode, setMode] = useState('cash')
@@ -27,6 +27,7 @@ export default function RecordPaymentPage() {
   const [error, setError] = useState(null)
   const [receiptFilename, setReceiptFilename] = useState(null)
   const [receiptPayment, setReceiptPayment] = useState(null)
+  const [receiptDueBefore, setReceiptDueBefore] = useState(0)
 
   if (!member) {
     return (
@@ -52,24 +53,25 @@ export default function RecordPaymentPage() {
         mode,
         collectedBy: null,
         currentDueAmount: dueBefore,
+        ownerId,
       })
 
       // Generate the receipt right away — every single payment gets one,
-      // same as the iOS app.
-      const filename = generateReceiptPDF(gymName, member, savedPayment, dueBefore, dueAfter)
+      // same as the iOS app. Plan label and invoice number are both
+      // auto-derived inside generateReceiptPDF if not passed explicitly.
+      const filename = generateReceiptPDF(member, savedPayment, dueBefore, dueAfter)
       setReceiptFilename(filename)
       setReceiptPayment(savedPayment)
+      setReceiptDueBefore(dueBefore)
     } catch (err) {
       setError(err.message)
     }
     setSaving(false)
   }
 
-  async function handleShareAgain() {
-    // Re-download / re-share the same receipt if the person wants another copy.
-    const dueBefore = member.dueAmount || 0
-    const dueAfter = Math.max(0, dueBefore - receiptPayment.amount)
-    generateReceiptPDF(gymName, member, receiptPayment, dueBefore, dueAfter)
+  function handleShareAgain() {
+    const dueAfter = Math.max(0, receiptDueBefore - receiptPayment.amount)
+    generateReceiptPDF(member, receiptPayment, receiptDueBefore, dueAfter)
   }
 
   return (
@@ -109,9 +111,9 @@ export default function RecordPaymentPage() {
             <button
               type="button"
               onClick={handleShareAgain}
-              className="w-full bg-accent text-white font-semibold py-2.5 rounded-xl text-sm"
+              className="w-full bg-accent text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-1.5"
             >
-              <span className="inline-flex items-center gap-1.5"><Download size={16} /> Download Receipt Again</span>
+              <Download size={16} /> Download Receipt Again
             </button>
             <button
               type="button"
