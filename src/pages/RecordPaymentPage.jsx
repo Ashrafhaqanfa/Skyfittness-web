@@ -56,9 +56,6 @@ export default function RecordPaymentPage() {
         ownerId,
       })
 
-      // Generate the receipt right away — every single payment gets one,
-      // same as the iOS app. Plan label and invoice number are both
-      // auto-derived inside generateReceiptPDF if not passed explicitly.
       const filename = generateReceiptPDF(member, savedPayment, dueBefore, dueAfter)
       setReceiptFilename(filename)
       setReceiptPayment(savedPayment)
