@@ -61,4 +61,16 @@ export async function deleteEnquiry(id) {
 
 export function todaysFollowUps(enquiries) {
   const today = new Date()
-  return
+  return enquiries.filter((e) => {
+    if (!e.followUpDate) return false
+    const sameDay =
+      e.followUpDate.getFullYear() === today.getFullYear() &&
+      e.followUpDate.getMonth() === today.getMonth() &&
+      e.followUpDate.getDate() === today.getDate()
+    return sameDay && e.status !== 'converted' && e.status !== 'lost'
+  })
+}
+
+export function enquiriesWithStatus(enquiries, status) {
+  return enquiries.filter((e) => e.status === status)
+}
