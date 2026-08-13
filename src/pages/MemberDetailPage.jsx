@@ -5,6 +5,12 @@ import { usePayments } from '../services/payments.js'
 import { useDietPlans, dietPlansForMember } from '../services/dietPlans.js'
 import { useReferrals, referralsByMember } from '../services/referrals.js'
 
+const PLAN_TYPE_LABELS = {
+  regular: 'Regular',
+  trainer: 'Trainer',
+  premiumTrainer: 'Premium Trainer',
+}
+
 export default function MemberDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -48,6 +54,7 @@ export default function MemberDetailPage() {
           <div className="grid grid-cols-2 gap-2 pt-3 text-sm">
             <InfoRow label="Expiry" value={member.expiryDate?.toLocaleDateString()} />
             <InfoRow label="Due Amount" value={`₹${member.dueAmount}`} />
+            <InfoRow label="Plan Type" value={PLAN_TYPE_LABELS[member.planType] || 'Regular'} />
             <InfoRow label="Goal" value={member.goal || '—'} />
             <InfoRow label="Batch" value={member.batch || '—'} />
           </div>
