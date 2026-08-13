@@ -16,12 +16,21 @@ const STANDARD_DURATIONS = [
   { label: '1 Year', months: 12 },
 ]
 
+// Independent of duration — lets you tell trainer-assisted members apart
+// from regular ones for monitoring/filtering (Members list, receipts, etc.)
+const PLAN_TYPES = [
+  { value: 'regular', label: 'Regular' },
+  { value: 'trainer', label: 'Trainer' },
+  { value: 'premiumTrainer', label: 'Premium Trainer' },
+]
+
 const emptyForm = {
   memberCode: '', name: '', address: '', gender: 'male', dialCode: '+91', phone: '',
   dateOfBirth: '', goal: '', heightCm: '', weightKg: '', isVIP: false,
   joinDate: new Date().toISOString().slice(0, 10),
   expiryDate: '', dueAmount: '', status: 'live',
   categoryId: '', planId: '', planAmount: '', paymentMode: 'cash', paidAmount: '',
+  planType: 'regular',
   enrollmentFee: '0', discountType: 'None', discount: '', taxAmount: '0',
   dueAmountReminderDate: '', billDate: new Date().toISOString().slice(0, 10),
   batch: '', marriageAnniversary: '', email: '', homePhone: '', careOf: '',
@@ -56,6 +65,7 @@ export default function AddEditMemberPage() {
       joinDate: toInputDate(m.joinDate) || emptyForm.joinDate,
       expiryDate: toInputDate(m.expiryDate), dueAmount: m.dueAmount ?? '',
       status: m.status || 'live', categoryId: m.categoryId || '', planId: m.planId || '',
+      planType: m.planType || 'regular',
       planAmount: '', paymentMode: 'cash', paidAmount: m.paidAmount ?? '',
       enrollmentFee: m.enrollmentFee ?? 0, discountType: m.discountType || 'None',
       discount: m.discountAmount ?? '', taxAmount: m.taxAmount ?? 0,
@@ -122,6 +132,7 @@ export default function AddEditMemberPage() {
         dueAmount: Number(form.dueAmount) || 0,
         status: form.status,
         categoryId: form.categoryId,
+        planType: form.planType,
         planId: form.planId,
         email: form.email || null,
         enrollmentFee: Number(form.enrollmentFee) || 0,
@@ -210,6 +221,29 @@ export default function AddEditMemberPage() {
                 Selected: {STANDARD_DURATIONS.find((d) => d.months === selectedDuration)?.label}
               </p>
             )}
+          </div>
+
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">Plan Type</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {PLAN_TYPES.map((t) => {
+                const isSelected = form.planType === t.value
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => set('planType', t.value)}
+                    className={`border rounded-xl py-2 text-[11px] font-semibold transition-colors ${
+                      isSelected
+                        ? 'bg-accent text-white border-accent'
+                        : 'border-gray-200 text-gray-700 active:bg-accent-light active:text-accent active:border-accent'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <Field placeholder="Address (optional)" value={form.address} onChange={(v) => set('address', v)} />
