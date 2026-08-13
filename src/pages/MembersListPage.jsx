@@ -5,7 +5,7 @@ import BottomNav from '../components/BottomNav.jsx'
 import {
   useMembers, isExpired, expiryBucket, isBirthdayToday, isAnniversaryToday,
 } from '../services/members.js'
-import { UserPlus, Users, UserCheck, UserX, HelpCircle, AlertTriangle, Wallet, BellRing, Cake, Heart } from 'lucide-react'
+import { UserPlus, Users, UserCheck, UserX, HelpCircle, AlertTriangle, Wallet, BellRing, Cake, Heart, Dumbbell } from 'lucide-react'
 
 const filters = [
   { key: 'all', label: 'All', Icon: Users },
@@ -20,6 +20,7 @@ const filters = [
   { key: 'dueReminder', label: 'Due Reminder Today', Icon: BellRing },
   { key: 'birthday', label: 'Birthday Today', Icon: Cake },
   { key: 'anniversary', label: 'Anniversary Today', Icon: Heart },
+  { key: 'trainer', label: 'Trainer Plans', Icon: Dumbbell },
 ]
 
 function matchesFilter(m, filterKey) {
@@ -47,6 +48,7 @@ function matchesFilter(m, filterKey) {
     }
     case 'birthday': return isBirthdayToday(m)
     case 'anniversary': return isAnniversaryToday(m)
+    case 'trainer': return m.planType === 'trainer' || m.planType === 'premiumTrainer'
     default: return true
   }
 }
@@ -57,8 +59,6 @@ export default function MembersListPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState(searchParams.get('filter') || 'all')
 
-  // If the dashboard sends a new filter (e.g. tapping a different tile while
-  // already on this page via back/forward), keep it in sync.
   useEffect(() => {
     const fromUrl = searchParams.get('filter')
     if (fromUrl && fromUrl !== filter) setFilter(fromUrl)
@@ -129,9 +129,10 @@ export default function MembersListPage() {
                 <p className="font-semibold truncate">{m.name}</p>
                 <p className="text-xs text-gray-500">{m.phone}</p>
               </div>
-              <div className="text-right">
+              <div className="text-right space-y-1">
                 <BucketBadge member={m} />
-                {m.dueAmount > 0 && <p className="text-xs text-red-500 mt-1">Due ₹{m.dueAmount}</p>}
+                <PlanTypeBadge member={m} />
+                {m.dueAmount > 0 && <p className="text-xs text-red-500">Due ₹{m.dueAmount}</p>}
               </div>
             </Link>
           ))}
@@ -153,5 +154,15 @@ function BucketBadge({ member }) {
     notExpiringSoon: ['Active', 'bg-green-100 text-green-600'],
   }
   const [label, cls] = map[bucket] || map.notExpiringSoon
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full block ${cls}`}>{label}</span>
+}
+
+function PlanTypeBadge({ member }) {
+  if (member.planType === 'trainer') {
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full block bg-purple-100 text-purple-600">Trainer</span>
+  }
+  if (member.planType === 'premiumTrainer') {
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full block bg-indigo-100 text-indigo-600">Premium Trainer</span>
+  }
+  return null
 }
