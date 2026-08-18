@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import {
-  useMembers, isExpired, expiryBucket, isBirthdayToday, isAnniversaryToday,
+  useMembers, isExpired, expiryBucket, isBirthdayToday, isAnniversaryToday, derivePlanLabel,
 } from '../services/members.js'
 import { UserPlus, Users, UserCheck, UserX, HelpCircle, AlertTriangle, Wallet, BellRing, Cake, Heart, Dumbbell } from 'lucide-react'
 
@@ -132,6 +132,7 @@ export default function MembersListPage() {
               <div className="text-right space-y-1">
                 <BucketBadge member={m} />
                 <PlanTypeBadge member={m} />
+                <p className="text-[10px] text-gray-400">{derivePlanLabel(m)}</p>
                 {m.dueAmount > 0 && <p className="text-xs text-red-500">Due ₹{m.dueAmount}</p>}
               </div>
             </Link>
