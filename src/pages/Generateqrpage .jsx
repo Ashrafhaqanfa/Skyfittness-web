@@ -3,14 +3,6 @@
 // Generates a QR code that opens the Add Member page directly. Scanning it
 // (on a phone or tablet at the front desk) jumps straight past Dashboard →
 // Members → + , saving a few taps for busy walk-in registration.
-//
-// NOTE ON SCOPE: this QR still opens the normal, already-authenticated Add
-// Member page — whoever scans it needs to already be signed in as you (the
-// gym owner) on that device. A QR that lets a stranger self-register
-// without logging in at all is a different, bigger feature: it needs a
-// public (unauthenticated) write path added to Firestore, which is a real
-// security decision rather than something to add quietly. Ask if you want
-// to go that route and we'll design it properly.
 
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
