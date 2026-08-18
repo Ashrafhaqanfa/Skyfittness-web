@@ -58,9 +58,9 @@ export default function SettingsPage() {
       )}
 
       <MenuSection title="Quick Actions">
-        <ComingSoonLink title="AI Assistant" Icon={Sparkles}>
+        <Link to="/ai-assistant">
           <MenuRow Icon={Sparkles} title="AI Assistant" subtitle="Your personal AI tool" badge="New" />
-        </ComingSoonLink>
+        </Link>
         <ComingSoonLink title="Subscription" Icon={FileText}>
           <MenuRow Icon={FileText} title="Subscription" subtitle="Subscription Plans & Payments" />
         </ComingSoonLink>
@@ -95,9 +95,9 @@ export default function SettingsPage() {
 
       <MenuSection title="Reports & Settings">
         <Link to="/reports"><MenuRow Icon={BarChart3} title="Report" subtitle="View performance reports" /></Link>
-        <ComingSoonLink title="Generate QR Code" Icon={QrCode}>
+        <Link to="/generate-qr">
           <MenuRow Icon={QrCode} title="Generate QR Code" subtitle="Quick access check-in" />
-        </ComingSoonLink>
+        </Link>
       </MenuSection>
 
       <MenuSection title="More">
