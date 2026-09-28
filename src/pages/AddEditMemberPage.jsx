@@ -9,12 +9,18 @@ import { useAuth } from '../context/AuthContext.jsx'
 // Standard durations available for every customer, regardless of whether
 // custom categories/plans have been set up yet.
 const STANDARD_DURATIONS = [
-  { label: '1 Month', months: 1 },
-  { label: '2 Months', months: 2 },
-  { label: '3 Months', months: 3 },
-  { label: '6 Months', months: 6 },
-  { label: '1 Year', months: 12 },
+  { label: 'Monthly', months: 1, price: 1500 },
+  { label: '3 Months', months: 3, price: 4000 },
+  { label: '6 Months', months: 6, price: 5000 },
+  { label: '1 Year', months: 12, price: 7000 },
 ]
+
+const REGULAR_PRICES = {
+  1: 1500,
+  3: 4000,
+  6: 5000,
+  12: 7000,
+}
 
 // Independent of duration — lets you tell trainer-assisted members apart
 // from regular ones for monitoring/filtering (Members list, receipts, etc.)
