@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import {
-  useMembers, isExpired, expiryBucket, isBirthdayToday, isAnniversaryToday, derivePlanLabel,
+  useMembers, isExpired, expiryBucket, isBirthdayToday, isAnniversaryToday, derivePlanLabel, deleteMember,
 } from '../services/members.js'
 import { UserPlus, Users, UserCheck, UserX, HelpCircle, AlertTriangle, Wallet, BellRing, Cake, Heart, Dumbbell } from 'lucide-react'
 
@@ -53,11 +53,18 @@ function matchesFilter(m, filterKey) {
   }
 }
 
+function formatExpiry(date) {
+  if (!date) return null
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export default function MembersListPage() {
   const { members, loading } = useMembers()
   const [searchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState(searchParams.get('filter') || 'all')
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const fromUrl = searchParams.get('filter')
@@ -70,6 +77,18 @@ export default function MembersListPage() {
     .filter((m) => m.name.toLowerCase().includes(search.toLowerCase()) || m.phone?.includes(search))
 
   const activeFilterLabel = filters.find((f) => f.key === filter)?.label || 'All'
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return
+    setDeleting(true)
+    try {
+      await deleteMember(pendingDelete.id)
+      setPendingDelete(null)
+    } catch (err) {
+      console.error('delete member failed:', err)
+    }
+    setDeleting(false)
+  }
 
   return (
     <div>
@@ -117,31 +136,96 @@ export default function MembersListPage() {
 
         <div className="space-y-2">
           {filtered.map((m) => (
-            <Link
-              key={m.id}
-              to={`/members/${m.id}`}
-              className="block bg-white rounded-xl p-3 shadow-sm flex items-center gap-3"
-            >
-              <div className="w-11 h-11 rounded-full bg-accent-light text-accent flex items-center justify-center font-bold">
-                {m.name?.[0]?.toUpperCase() || '?'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold truncate">{m.name}</p>
-                <p className="text-xs text-gray-500">{m.phone}</p>
-              </div>
-              <div className="text-right space-y-1">
-                <BucketBadge member={m} />
-                <PlanTypeBadge member={m} />
-                <p className="text-[10px] text-gray-400">{derivePlanLabel(m)}</p>
-                {m.dueAmount > 0 && <p className="text-xs text-red-500">Due ₹{m.dueAmount}</p>}
-              </div>
-            </Link>
+            <MemberCard key={m.id} member={m} onLongPress={setPendingDelete} />
           ))}
         </div>
       </div>
 
       <BottomNav />
+
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-6">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm text-center shadow-lg">
+            <p className="font-bold text-base mb-2">Delete Member?</p>
+            <p className="text-sm text-gray-600 mb-5">
+              Are you sure you want to delete {pendingDelete.name}?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPendingDelete(null)}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-semibold text-sm disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function MemberCard({ member, onLongPress }) {
+  const timerRef = useRef(null)
+  const firedRef = useRef(false)
+
+  function startPress() {
+    firedRef.current = false
+    timerRef.current = setTimeout(() => {
+      firedRef.current = true
+      onLongPress(member)
+    }, 1000)
+  }
+
+  function cancelPress() {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }
+
+  function handleClick(e) {
+    if (firedRef.current) {
+      e.preventDefault()
+      firedRef.current = false
+    }
+  }
+
+  return (
+    <Link
+      to={`/members/${member.id}`}
+      onClick={handleClick}
+      onPointerDown={startPress}
+      onPointerUp={cancelPress}
+      onPointerLeave={cancelPress}
+      onPointerCancel={cancelPress}
+      className="block bg-white rounded-xl p-3 shadow-sm flex items-center gap-3 select-none"
+    >
+      <div className="w-11 h-11 rounded-full bg-accent-light text-accent flex items-center justify-center font-bold">
+        {member.name?.[0]?.toUpperCase() || '?'}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold truncate">{member.name}</p>
+        <p className="text-xs text-gray-500">{member.phone}</p>
+        {formatExpiry(member.expiryDate) && (
+          <p className="text-xs text-gray-400 mt-0.5">Expires: {formatExpiry(member.expiryDate)}</p>
+        )}
+      </div>
+      <div className="text-right space-y-1">
+        <BucketBadge member={member} />
+        <PlanTypeBadge member={member} />
+        <p className="text-[10px] text-gray-400">{derivePlanLabel(member)}</p>
+        {member.dueAmount > 0 && <p className="text-xs text-red-500">Due ₹{member.dueAmount}</p>}
+      </div>
+    </Link>
   )
 }
 
