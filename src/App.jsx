@@ -47,8 +47,6 @@ export default function App() {
         <Route path="/more" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         <Route path="/sms-history" element={<ProtectedRoute><MessageHistoryPage /></ProtectedRoute>} />
         <Route path="/whatsapp-history" element={<ProtectedRoute><MessageHistoryPage /></ProtectedRoute>} />
-        <Route path="/generate-qr" element={<ProtectedRoute><GenerateQRPage /></ProtectedRoute>} />
-        <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistantPage /></ProtectedRoute>} />
         <Route path="/coming-soon" element={<ProtectedRoute><ComingSoonPage /></ProtectedRoute>} />
       </Routes>
     </div>
