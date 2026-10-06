@@ -17,8 +17,8 @@ import ManageStaffPage from './pages/ManageStaffPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import ComingSoonPage from './pages/ComingSoonPage.jsx'
 import MessageHistoryPage from './pages/MessageHistoryPage.jsx'
-import GenerateQRPage from './pages/GenerateQRPage.jsx'
-import AIAssistantPage from './pages/AIAssistantPage.jsx'
+
+
 
 export default function App() {
   return (
