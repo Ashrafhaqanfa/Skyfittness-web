@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { UserRound, Camera, ChevronUp, ChevronDown } from 'lucide-react'
+import { UserRound, Camera, ChevronUp, ChevronDown, CheckCircle2, Share2, Download, MessageSquare, ArrowRight } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import { useMembers, addMember, updateMember } from '../services/members.js'
 import { useCategoriesAndPlans, plansForCategory } from '../services/categoryPlans.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { recordPayment } from '../services/payments.js'
+import { generateReceiptPDF, shareReceiptPDF, getWhatsAppShareUrl, formatDMY } from '../services/receipts.js'
 
-// Standard durations available for every customer, regardless of whether
-// custom categories/plans have been set up yet.
+// Standard durations available for every customer
 const STANDARD_DURATIONS = [
-    { label: 'Monthly', months: 1, price: 1500 },
+  { label: 'Monthly', months: 1, price: 1500 },
   { label: '3 Months', months: 3, price: 4000 },
   { label: '6 Months', months: 6, price: 5000 },
   { label: '1 Year', months: 12, price: 7000 },
@@ -22,8 +23,7 @@ const REGULAR_PRICES = {
   12: 7000,
 }
 
-// Independent of duration — lets you tell trainer-assisted members apart
-// from regular ones for monitoring/filtering (Members list, receipts, etc.)
+// Plan Types: Regular has automated tier pricing, trainer/premium have custom trainer fees
 const PLAN_TYPES = [
   { value: 'regular', label: 'Regular' },
   { value: 'trainer', label: 'Trainer' },
@@ -34,7 +34,7 @@ const emptyForm = {
   memberCode: '', name: '', address: '', gender: 'male', dialCode: '+91', phone: '',
   dateOfBirth: '', goal: '', heightCm: '', weightKg: '', isVIP: false,
   joinDate: new Date().toISOString().slice(0, 10),
-  expiryDate: '', dueAmount: '', status: 'live',
+  expiryDate: '', dueAmount: '0', status: 'live',
   categoryId: '', planId: '', planAmount: '', paymentMode: 'cash', paidAmount: '',
   planType: 'regular',
   enrollmentFee: '0', discountType: 'None', discount: '', taxAmount: '0',
@@ -57,6 +57,7 @@ export default function AddEditMemberPage() {
   const [selectedDuration, setSelectedDuration] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [receiptModal, setReceiptModal] = useState(null) // { member, payment, dueBefore, dueAfter, filename }
   const { ownerId } = useAuth()
 
   useEffect(() => {
@@ -87,16 +88,33 @@ export default function AddEditMemberPage() {
     setForm((f) => ({ ...f, [field]: value }))
   }
 
+  function recalculateDue(planAmt, paidAmt, enrollment = form.enrollmentFee, tax = form.taxAmount, disc = form.discount) {
+    const p = Number(planAmt) || 0
+    const e = Number(enrollment) || 0
+    const t = Number(tax) || 0
+    const d = Number(disc) || 0
+    const total = Math.max(0, p + e + t - d)
+    const paid = Number(paidAmt) || 0
+    return String(Math.max(0, total - paid))
+  }
+
   function onPlanChange(planId) {
     set('planId', planId)
     const plan = plans.find((p) => p.id === planId)
     if (plan) {
-      set('planAmount', String(plan.price))
-      set('dueAmount', String(plan.price))
-      const start = new Date(form.joinDate)
+      const priceStr = String(plan.price)
+      const start = new Date(form.joinDate || Date.now())
       const expiry = new Date(start)
       expiry.setDate(expiry.getDate() + plan.durationDays)
-      set('expiryDate', expiry.toISOString().slice(0, 10))
+      const due = recalculateDue(priceStr, priceStr)
+      setForm((f) => ({
+        ...f,
+        planId,
+        planAmount: priceStr,
+        paidAmount: priceStr,
+        dueAmount: due,
+        expiryDate: expiry.toISOString().slice(0, 10),
+      }))
     }
   }
 
@@ -104,8 +122,67 @@ export default function AddEditMemberPage() {
     const start = form.joinDate ? new Date(form.joinDate) : new Date()
     const expiry = new Date(start)
     expiry.setMonth(expiry.getMonth() + months)
-    set('expiryDate', expiry.toISOString().slice(0, 10))
+    const expiryStr = expiry.toISOString().slice(0, 10)
     setSelectedDuration(months)
+
+    if (form.planType === 'regular' && REGULAR_PRICES[months] != null) {
+      const price = REGULAR_PRICES[months]
+      const priceStr = String(price)
+      setForm((f) => {
+        const due = recalculateDue(priceStr, priceStr, f.enrollmentFee, f.taxAmount, f.discount)
+        return {
+          ...f,
+          expiryDate: expiryStr,
+          planAmount: priceStr,
+          paidAmount: priceStr,
+          dueAmount: due,
+        }
+      })
+    } else {
+      // For trainer / premiumTrainer, only set expiry date — do not auto-set regular prices
+      setForm((f) => ({
+        ...f,
+        expiryDate: expiryStr,
+      }))
+    }
+  }
+
+  function handlePlanTypeChange(type) {
+    if (type === 'regular') {
+      if (selectedDuration && REGULAR_PRICES[selectedDuration] != null) {
+        const price = REGULAR_PRICES[selectedDuration]
+        const priceStr = String(price)
+        setForm((f) => {
+          const due = recalculateDue(priceStr, priceStr, f.enrollmentFee, f.taxAmount, f.discount)
+          return {
+            ...f,
+            planType: type,
+            planAmount: priceStr,
+            paidAmount: priceStr,
+            dueAmount: due,
+          }
+        })
+        return
+      }
+    }
+    // For trainer or premiumTrainer, do not auto-set regular prices
+    setForm((f) => ({ ...f, planType: type }))
+  }
+
+  function handlePlanAmountChange(val) {
+    setForm((f) => ({
+      ...f,
+      planAmount: val,
+      dueAmount: recalculateDue(val, f.paidAmount, f.enrollmentFee, f.taxAmount, f.discount),
+    }))
+  }
+
+  function handlePaidAmountChange(val) {
+    setForm((f) => ({
+      ...f,
+      paidAmount: val,
+      dueAmount: recalculateDue(f.planAmount, val, f.enrollmentFee, f.taxAmount, f.discount),
+    }))
   }
 
   function handleFile(setter, e) {
@@ -137,9 +214,9 @@ export default function AddEditMemberPage() {
         expiryDate: form.expiryDate ? new Date(form.expiryDate) : new Date(),
         dueAmount: Number(form.dueAmount) || 0,
         status: form.status,
-        categoryId: form.categoryId,
+        categoryId: form.categoryId || null,
         planType: form.planType,
-        planId: form.planId,
+        planId: form.planId || null,
         email: form.email || null,
         enrollmentFee: Number(form.enrollmentFee) || 0,
         discountType: form.discountType === 'None' ? null : form.discountType,
@@ -156,12 +233,53 @@ export default function AddEditMemberPage() {
         companyGST: form.companyGST || null,
         remark: form.remark || null,
       }
+
       if (isEdit) {
         await updateMember(id, payload, ownerId)
+        navigate(-1)
       } else {
-        await addMember(payload, ownerId)
+        // Create new member
+        const docRef = await addMember(payload, ownerId)
+        const newMemberId = docRef.id
+        const newMemberData = { ...payload, id: newMemberId }
+
+        const paid = Number(form.paidAmount) || 0
+        if (paid > 0) {
+          // Total amount due before this payment
+          const totalPlan = Number(form.planAmount) || paid
+          const enrollment = Number(form.enrollmentFee) || 0
+          const tax = Number(form.taxAmount) || 0
+          const discount = Number(form.discount) || 0
+          const dueBefore = Math.max(paid, totalPlan + enrollment + tax - discount)
+          const dueAfter = Math.max(0, dueBefore - paid)
+
+          // Record payment in Firestore payments collection
+          const savedPayment = await recordPayment({
+            memberId: newMemberId,
+            amount: paid,
+            mode: form.paymentMode || 'cash',
+            collectedBy: null,
+            currentDueAmount: dueBefore,
+            ownerId,
+          })
+
+          // Generate receipt PDF file automatically
+          const filename = generateReceiptPDF(newMemberData, savedPayment, dueBefore, dueAfter)
+
+          // Show modal with receipt details and sharing options
+          setReceiptModal({
+            member: newMemberData,
+            payment: savedPayment,
+            dueBefore,
+            dueAfter,
+            filename,
+          })
+          setSaving(false)
+          return
+        } else {
+          navigate(-1)
+        }
       }
-      navigate(-1)
     } catch (err) {
       setError(err.message)
     }
@@ -201,9 +319,17 @@ export default function AddEditMemberPage() {
           </div>
           <Field placeholder="Name" value={form.name} onChange={(v) => set('name', v)} required />
 
+          {/* Plan Duration selector */}
           <div>
-            <p className="text-xs text-gray-500 mb-1.5">Plan Duration</p>
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs text-gray-500">Plan Duration</p>
+              {form.planType === 'regular' && (
+                <span className="text-[10px] text-accent font-medium bg-accent-light px-2 py-0.5 rounded-full">
+                  Auto regular pricing
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-2">
               {STANDARD_DURATIONS.map((d) => {
                 const isSelected = selectedDuration === d.months
                 return (
@@ -211,13 +337,18 @@ export default function AddEditMemberPage() {
                     key={d.months}
                     type="button"
                     onClick={() => applyDuration(d.months)}
-                    className={`border rounded-xl py-2 text-[11px] font-semibold transition-colors ${
+                    className={`border rounded-xl py-2 px-1 text-center transition-all ${
                       isSelected
-                        ? 'bg-accent text-white border-accent'
-                        : 'border-gray-200 text-gray-700 active:bg-accent-light active:text-accent active:border-accent'
+                        ? 'bg-accent text-white border-accent shadow-sm'
+                        : 'border-gray-200 text-gray-700 bg-gray-50/50 hover:bg-gray-100'
                     }`}
                   >
-                    {d.label}
+                    <span className="block text-[11px] font-semibold">{d.label}</span>
+                    {form.planType === 'regular' && (
+                      <span className={`block text-[10px] font-bold mt-0.5 ${isSelected ? 'text-white' : 'text-accent'}`}>
+                        ₹{d.price}
+                      </span>
+                    )}
                   </button>
                 )
               })}
@@ -225,10 +356,12 @@ export default function AddEditMemberPage() {
             {selectedDuration && (
               <p className="text-xs text-accent font-medium mt-1.5">
                 Selected: {STANDARD_DURATIONS.find((d) => d.months === selectedDuration)?.label}
+                {form.planType === 'regular' && ` (₹${REGULAR_PRICES[selectedDuration]})`}
               </p>
             )}
           </div>
 
+          {/* Plan Type selector */}
           <div>
             <p className="text-xs text-gray-500 mb-1.5">Plan Type</p>
             <div className="grid grid-cols-3 gap-1.5">
@@ -238,11 +371,11 @@ export default function AddEditMemberPage() {
                   <button
                     key={t.value}
                     type="button"
-                    onClick={() => set('planType', t.value)}
+                    onClick={() => handlePlanTypeChange(t.value)}
                     className={`border rounded-xl py-2 text-[11px] font-semibold transition-colors ${
                       isSelected
                         ? 'bg-accent text-white border-accent'
-                        : 'border-gray-200 text-gray-700 active:bg-accent-light active:text-accent active:border-accent'
+                        : 'border-gray-200 text-gray-700 bg-gray-50/50 hover:bg-gray-100'
                     }`}
                   >
                     {t.label}
@@ -250,6 +383,11 @@ export default function AddEditMemberPage() {
                 )
               })}
             </div>
+            {form.planType !== 'regular' && (
+              <p className="text-[11px] text-purple-600 font-medium mt-1">
+                Custom pricing for {PLAN_TYPES.find((p) => p.value === form.planType)?.label} — enter plan amount below.
+              </p>
+            )}
           </div>
 
           <Field placeholder="Address (optional)" value={form.address} onChange={(v) => set('address', v)} />
@@ -298,11 +436,7 @@ export default function AddEditMemberPage() {
 
         {/* Plan Details */}
         <Disclosure title="Plan Details" open={planSectionOpen} onToggle={() => setPlanSectionOpen((v) => !v)}>
-          {categories.length === 0 ? (
-            <p className="text-xs text-gray-500">
-              No categories yet — go to More → Setup → Load sample categories & plans.
-            </p>
-          ) : (
+          {categories.length > 0 && (
             <>
               <select value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
                 <option value="">Category</option>
@@ -316,20 +450,51 @@ export default function AddEditMemberPage() {
               </select>
             </>
           )}
-          <Field placeholder="Plan Amount" value={form.planAmount} onChange={(v) => set('planAmount', v)} type="number" />
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Plan Amount</label>
+            <Field placeholder="Plan Amount" value={form.planAmount} onChange={handlePlanAmountChange} type="number" />
+          </div>
+
           <DateField value={form.joinDate} onChange={(v) => set('joinDate', v)} placeholder="Start Date" />
           <DateField value={form.expiryDate} onChange={(v) => set('expiryDate', v)} placeholder="Expiry Date" />
-          <select value={form.paymentMode} onChange={(e) => set('paymentMode', e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
-            {['cash', 'upi', 'card', 'other'].map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}
-          </select>
-          <Field placeholder="Paid Amount" value={form.paidAmount} onChange={(v) => set('paidAmount', v)} type="number" />
-          <Field placeholder="Enrollment Fee" value={form.enrollmentFee} onChange={(v) => set('enrollmentFee', v)} type="number" />
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Payment Mode</label>
+            <select value={form.paymentMode} onChange={(e) => set('paymentMode', e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
+              {['cash', 'upi', 'card', 'other'].map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Paid Amount</label>
+            <Field placeholder="Paid Amount" value={form.paidAmount} onChange={handlePaidAmountChange} type="number" />
+          </div>
+
+          <Field placeholder="Enrollment Fee" value={form.enrollmentFee} onChange={(v) => {
+            set('enrollmentFee', v)
+            set('dueAmount', recalculateDue(form.planAmount, form.paidAmount, v, form.taxAmount, form.discount))
+          }} type="number" />
+
           <select value={form.discountType} onChange={(e) => set('discountType', e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
             {['None', 'Flat', 'Percentage'].map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
-          <Field placeholder="Discount" value={form.discount} onChange={(v) => set('discount', v)} type="number" />
-          <Field placeholder="Tax Amount" value={form.taxAmount} onChange={(v) => set('taxAmount', v)} type="number" />
-          <Field placeholder="Due Amount" value={form.dueAmount} onChange={(v) => set('dueAmount', v)} type="number" />
+
+          <Field placeholder="Discount" value={form.discount} onChange={(v) => {
+            set('discount', v)
+            set('dueAmount', recalculateDue(form.planAmount, form.paidAmount, form.enrollmentFee, form.taxAmount, v))
+          }} type="number" />
+
+          <Field placeholder="Tax Amount" value={form.taxAmount} onChange={(v) => {
+            set('taxAmount', v)
+            set('dueAmount', recalculateDue(form.planAmount, form.paidAmount, form.enrollmentFee, v, form.discount))
+          }} type="number" />
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Due Amount</label>
+            <Field placeholder="Due Amount" value={form.dueAmount} onChange={(v) => set('dueAmount', v)} type="number" />
+          </div>
+
           <DateField value={form.dueAmountReminderDate} onChange={(v) => set('dueAmountReminderDate', v)} placeholder="Due Amount Reminder" />
           <DateField value={form.billDate} onChange={(v) => set('billDate', v)} placeholder="Bill Date" />
         </Disclosure>
@@ -370,10 +535,88 @@ export default function AddEditMemberPage() {
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
-        <button type="submit" disabled={saving} className="w-full bg-accent text-white font-semibold py-3 rounded-xl disabled:opacity-60">
-          {saving ? 'Saving…' : 'Submit'}
+        <button type="submit" disabled={saving} className="w-full bg-accent text-white font-semibold py-3 rounded-xl disabled:opacity-60 shadow-md">
+          {saving ? 'Saving & Recording Payment…' : 'Submit'}
         </button>
       </form>
+
+      {/* Payment Recorded & Receipt Modal */}
+      {receiptModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-16 h-16 rounded-full bg-green-100 text-green-600 mx-auto flex items-center justify-center">
+              <CheckCircle2 size={36} />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Member Added & Payment Recorded</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Receipt generated automatically and saved to your Downloads ({receiptModal.filename})
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-2xl p-4 text-left space-y-2 text-xs border border-gray-100">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Member:</span>
+                <span className="font-semibold text-gray-800">{receiptModal.member.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Amount Paid:</span>
+                <span className="font-bold text-green-600">₹{receiptModal.payment.amount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Payment Mode:</span>
+                <span className="font-medium uppercase">{receiptModal.payment.mode}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Expiry Date:</span>
+                <span className="font-semibold">{receiptModal.member.expiryDate ? formatDMY(receiptModal.member.expiryDate) : '—'}</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-gray-200">
+                <span className="text-gray-500">Remaining Due:</span>
+                <span className={`font-bold ${receiptModal.dueAfter > 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                  ₹{receiptModal.dueAfter}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={() => shareReceiptPDF(receiptModal.member, receiptModal.payment, receiptModal.dueBefore, receiptModal.dueAfter)}
+                className="w-full bg-accent text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-transform"
+              >
+                <Share2 size={16} /> Share Receipt (PDF)
+              </button>
+
+              <a
+                href={getWhatsAppShareUrl(receiptModal.member, receiptModal.payment, receiptModal.dueAfter)}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full bg-green-600 text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-transform"
+              >
+                <MessageSquare size={16} /> Share on WhatsApp
+              </a>
+
+              <button
+                type="button"
+                onClick={() => generateReceiptPDF(receiptModal.member, receiptModal.payment, receiptModal.dueBefore, receiptModal.dueAfter)}
+                className="w-full bg-gray-100 text-gray-700 font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-gray-200"
+              >
+                <Download size={15} /> Download PDF Again
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/members/${receiptModal.member.id}`)}
+                className="w-full text-accent font-semibold py-2 text-sm flex items-center justify-center gap-1 hover:underline"
+              >
+                View Member Profile <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
