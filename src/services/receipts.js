@@ -19,7 +19,7 @@ const BUSINESS = {
 const BG_COLOR = [243, 232, 245]      // light lavender page background
 const DUE_HIGHLIGHT = [186, 216, 236] // light blue highlight behind Due Amount
 
-export function generateReceiptPDF(member, payment, dueBefore, dueAfter, invoiceNumber, planLabel) {
+export function createReceiptPDFDoc(member, payment, dueBefore, dueAfter, invoiceNumber, planLabel) {
   const label = planLabel || derivePlanLabel(member)
   const invoice = invoiceNumber || `INV${String(payment.id || '').slice(0, 6).toUpperCase()}`
   const pageWidth = 210 // A4-ish width in mm, portrait
@@ -80,11 +80,12 @@ export function generateReceiptPDF(member, payment, dueBefore, dueAfter, invoice
   y += 6
 
   doc.setFont(undefined, 'normal')
+  const pDate = payment.paymentDate instanceof Date ? payment.paymentDate : new Date(payment.paymentDate || Date.now())
   const row = [
-    payment.paymentDate.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' }),
+    pDate.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' }),
     label,
-    member.joinDate ? formatDMY(member.joinDate) : '—',
-    member.expiryDate ? formatDMY(member.expiryDate) : '—',
+    member.joinDate ? formatDMY(new Date(member.joinDate)) : '—',
+    member.expiryDate ? formatDMY(new Date(member.expiryDate)) : '—',
     String(Math.round(dueBefore + payment.amount)),
   ]
   row.forEach((v, i) => doc.text(v, cols[i], y))
@@ -101,8 +102,67 @@ export function generateReceiptPDF(member, payment, dueBefore, dueAfter, invoice
   y = totalsLine(doc, totalsLabelX, totalsValueX, y, 'Due Amount', dueAfter, true)
 
   const filename = `${BUSINESS.name}_${invoice}.pdf`
+  return { doc, filename, invoice }
+}
+
+export function generateReceiptPDF(member, payment, dueBefore, dueAfter, invoiceNumber, planLabel) {
+  const { doc, filename } = createReceiptPDFDoc(member, payment, dueBefore, dueAfter, invoiceNumber, planLabel)
   doc.save(filename)
   return filename
+}
+
+export async function shareReceiptPDF(member, payment, dueBefore, dueAfter, invoiceNumber, planLabel) {
+  const { doc, filename } = createReceiptPDFDoc(member, payment, dueBefore, dueAfter, invoiceNumber, planLabel)
+  const blob = doc.output('blob')
+  const file = new File([blob], filename, { type: 'application/pdf' })
+
+  if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        title: `Receipt for ${member.name}`,
+        text: `Payment Receipt from SKYFITNESS for ${member.name} - Amount: ₹${payment.amount}`,
+        files: [file],
+      })
+      return true
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('File share failed, falling back to download:', err)
+        doc.save(filename)
+      }
+      return false
+    }
+  } else if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      await navigator.share({
+        title: `Receipt for ${member.name}`,
+        text: `Payment Receipt from SKYFITNESS for ${member.name} - Amount: ₹${payment.amount}. Due: ₹${dueAfter}`,
+      })
+      doc.save(filename)
+      return true
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        doc.save(filename)
+      }
+      return false
+    }
+  } else {
+    doc.save(filename)
+    return false
+  }
+}
+
+export function getWhatsAppShareUrl(member, payment, dueAfter) {
+  const phone = (member.phone || '').replace(/[^0-9]/g, '')
+  const fullPhone = phone.length === 10 ? `91${phone}` : phone
+  const pDate = payment.paymentDate instanceof Date ? payment.paymentDate : new Date(payment.paymentDate || Date.now())
+  const text =
+    `*SKYFITNESS RECEIPT*\n` +
+    `Hello ${member.name},\n` +
+    `Thank you for your payment of *₹${payment.amount}* via ${(payment.mode || 'cash').toUpperCase()} on ${formatDMY(pDate)}.\n` +
+    `Membership Expiry: ${member.expiryDate ? formatDMY(new Date(member.expiryDate)) : '—'}\n` +
+    `Remaining Due: *₹${dueAfter}*\n\n` +
+    `Thank you for choosing SKYFITNESS!`
+  return `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`
 }
 
 function labelValueLine(doc, x, y, label, value) {
@@ -122,7 +182,8 @@ function totalsLine(doc, labelX, valueX, y, label, value, highlight) {
   return y + 7
 }
 
-function formatDMY(date) {
+export function formatDMY(date) {
+  if (!date) return '—'
   const d = String(date.getDate()).padStart(2, '0')
   const m = String(date.getMonth() + 1).padStart(2, '0')
   return `${d}-${m}-${date.getFullYear()}`
