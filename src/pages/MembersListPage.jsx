@@ -3,9 +3,12 @@ import { Link, useSearchParams } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 import {
-  useMembers, isExpired, expiryBucket, isBirthdayToday, isAnniversaryToday, derivePlanLabel, deleteMember,
+  useMembers, isExpired, expiryBucket, daysUntilExpiry, isBirthdayToday, isAnniversaryToday, derivePlanLabel, deleteMember,
 } from '../services/members.js'
-import { UserPlus, Users, UserCheck, UserX, HelpCircle, AlertTriangle, Wallet, BellRing, Cake, Heart, Dumbbell } from 'lucide-react'
+import {
+  UserPlus, Users, UserCheck, UserX, HelpCircle, AlertTriangle, Wallet,
+  BellRing, Cake, Heart, Dumbbell, Calendar, Trash2, MoreVertical
+} from 'lucide-react'
 
 const filters = [
   { key: 'all', label: 'All', Icon: Users },
@@ -101,13 +104,13 @@ export default function MembersListPage() {
         }
       />
 
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 pb-24">
         <input
           type="text"
           placeholder="Search by name or phone"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 text-sm"
+          className="w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 text-sm shadow-sm"
         />
 
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
@@ -115,8 +118,8 @@ export default function MembersListPage() {
             <button
               key={f.key}
               onClick={() => setFilter(f.key)}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm whitespace-nowrap ${
-                filter === f.key ? 'bg-accent text-white' : 'bg-white text-gray-500 border border-gray-200'
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+                filter === f.key ? 'bg-accent text-white shadow-sm' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
               }`}
             >
               <f.Icon size={14} /> {f.label}
@@ -124,9 +127,14 @@ export default function MembersListPage() {
           ))}
         </div>
 
-        <p className="text-xs text-gray-400">
-          Showing <span className="font-semibold text-gray-600">{activeFilterLabel}</span> — {filtered.length} member(s)
-        </p>
+        <div className="flex items-center justify-between text-xs text-gray-400 px-1">
+          <span>
+            Showing <span className="font-semibold text-gray-600">{activeFilterLabel}</span> — {filtered.length} member(s)
+          </span>
+          <span className="text-[11px] text-gray-400 italic">
+            Long-press to delete
+          </span>
+        </div>
 
         {loading && <p className="text-sm text-gray-400 text-center py-8">Loading…</p>}
 
@@ -134,7 +142,7 @@ export default function MembersListPage() {
           <p className="text-sm text-gray-400 text-center py-8">No members found for this filter.</p>
         )}
 
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {filtered.map((m) => (
             <MemberCard key={m.id} member={m} onLongPress={setPendingDelete} />
           ))}
@@ -143,27 +151,56 @@ export default function MembersListPage() {
 
       <BottomNav />
 
+      {/* Delete Member Confirmation Modal */}
       {pendingDelete && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-6">
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm text-center shadow-lg">
-            <p className="font-bold text-base mb-2">Delete Member?</p>
-            <p className="text-sm text-gray-600 mb-5">
-              Are you sure you want to delete {pendingDelete.name}?
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center shadow-xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-14 h-14 rounded-full bg-red-100 text-red-600 mx-auto flex items-center justify-center">
+              <Trash2 size={28} />
+            </div>
+
+            <div>
+              <h3 className="font-bold text-base text-gray-900">Delete Member?</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Are you sure you want to delete <span className="font-semibold text-gray-900">{pendingDelete.name}</span>?
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-3 text-left space-y-1.5 text-xs text-gray-600 border border-gray-100">
+              <div className="flex justify-between">
+                <span>Phone:</span>
+                <span className="font-medium text-gray-800">{pendingDelete.phone || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Expiry Date:</span>
+                <span className="font-medium text-gray-800">{formatExpiry(pendingDelete.expiryDate) || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Remaining Due:</span>
+                <span className="font-semibold text-red-500">₹{pendingDelete.dueAmount || 0}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-gray-400">
+              This action cannot be undone. All membership and record history will be removed.
             </p>
-            <div className="flex gap-2">
+
+            <div className="flex gap-2 pt-1">
               <button
+                type="button"
                 onClick={() => setPendingDelete(null)}
                 disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm disabled:opacity-60"
+                className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm hover:bg-gray-200 transition-colors disabled:opacity-60"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleConfirmDelete}
                 disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-semibold text-sm disabled:opacity-60"
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-colors shadow-sm disabled:opacity-60"
               >
-                {deleting ? 'Deleting…' : 'Delete'}
+                {deleting ? 'Deleting…' : 'Delete Member'}
               </button>
             </div>
           </div>
@@ -176,16 +213,23 @@ export default function MembersListPage() {
 function MemberCard({ member, onLongPress }) {
   const timerRef = useRef(null)
   const firedRef = useRef(false)
+  const [isPressing, setIsPressing] = useState(false)
 
   function startPress() {
     firedRef.current = false
+    setIsPressing(true)
     timerRef.current = setTimeout(() => {
       firedRef.current = true
+      setIsPressing(false)
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(50)
+      }
       onLongPress(member)
-    }, 1000)
+    }, 500) // 500ms for responsive long press
   }
 
   function cancelPress() {
+    setIsPressing(false)
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
@@ -195,37 +239,125 @@ function MemberCard({ member, onLongPress }) {
   function handleClick(e) {
     if (firedRef.current) {
       e.preventDefault()
+      e.stopPropagation()
       firedRef.current = false
     }
   }
 
+  function handleContextMenu(e) {
+    e.preventDefault()
+    cancelPress()
+    onLongPress(member)
+  }
+
+  // Calculate expiry status & days left
+  const days = daysUntilExpiry(member)
+  const isExp = isExpired(member)
+
+  let daysBadgeText = ''
+  let daysBadgeStyle = ''
+  if (!member.expiryDate) {
+    daysBadgeText = 'No expiry'
+    daysBadgeStyle = 'bg-gray-100 text-gray-500'
+  } else if (isExp) {
+    daysBadgeText = `${Math.abs(days)}d expired`
+    daysBadgeStyle = 'bg-red-100 text-red-600 font-bold'
+  } else if (days === 0) {
+    daysBadgeText = 'Expires today'
+    daysBadgeStyle = 'bg-orange-100 text-orange-600 font-bold animate-pulse'
+  } else if (days <= 3) {
+    daysBadgeText = `${days}d left`
+    daysBadgeStyle = 'bg-orange-100 text-orange-600 font-semibold'
+  } else if (days <= 7) {
+    daysBadgeText = `${days}d left`
+    daysBadgeStyle = 'bg-amber-100 text-amber-700 font-semibold'
+  } else if (days <= 15) {
+    daysBadgeText = `${days}d left`
+    daysBadgeStyle = 'bg-yellow-50 text-yellow-700 font-medium'
+  } else {
+    daysBadgeText = `${days}d left`
+    daysBadgeStyle = 'bg-emerald-50 text-emerald-700 font-medium'
+  }
+
   return (
-    <Link
-      to={`/members/${member.id}`}
-      onClick={handleClick}
-      onPointerDown={startPress}
-      onPointerUp={cancelPress}
-      onPointerLeave={cancelPress}
-      onPointerCancel={cancelPress}
-      className="block bg-white rounded-xl p-3 shadow-sm flex items-center gap-3 select-none"
-    >
-      <div className="w-11 h-11 rounded-full bg-accent-light text-accent flex items-center justify-center font-bold">
-        {member.name?.[0]?.toUpperCase() || '?'}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold truncate">{member.name}</p>
-        <p className="text-xs text-gray-500">{member.phone}</p>
-        {formatExpiry(member.expiryDate) && (
-          <p className="text-xs text-gray-400 mt-0.5">Expires: {formatExpiry(member.expiryDate)}</p>
-        )}
-      </div>
-      <div className="text-right space-y-1">
-        <BucketBadge member={member} />
-        <PlanTypeBadge member={member} />
-        <p className="text-[10px] text-gray-400">{derivePlanLabel(member)}</p>
-        {member.dueAmount > 0 && <p className="text-xs text-red-500">Due ₹{member.dueAmount}</p>}
-      </div>
-    </Link>
+    <div className="relative group">
+      <Link
+        to={`/members/${member.id}`}
+        onClick={handleClick}
+        onPointerDown={startPress}
+        onPointerUp={cancelPress}
+        onPointerLeave={cancelPress}
+        onPointerCancel={cancelPress}
+        onContextMenu={handleContextMenu}
+        className={`block bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100/80 transition-all select-none ${
+          isPressing
+            ? 'scale-[0.98] ring-2 ring-red-400 bg-red-50/30'
+            : 'hover:shadow-md hover:border-gray-200'
+        }`}
+        style={{ WebkitTouchCallout: 'none' }}
+      >
+        <div className="flex items-start gap-3">
+          {/* Avatar */}
+          <div className="w-12 h-12 rounded-full bg-accent-light text-accent flex items-center justify-center font-bold text-base flex-shrink-0 shadow-inner">
+            {member.name?.[0]?.toUpperCase() || '?'}
+          </div>
+
+          {/* Member Details */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="font-semibold text-gray-900 truncate text-sm">{member.name}</p>
+              {member.isVIP && (
+                <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded">
+                  VIP
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-gray-500 mt-0.5">{member.dialCode} {member.phone}</p>
+
+            {/* Prominent Date of Expiry row */}
+            <div className="flex items-center flex-wrap gap-1.5 mt-2">
+              <div className="flex items-center gap-1 text-xs">
+                <Calendar size={13} className={isExp ? 'text-red-500' : 'text-accent'} />
+                <span className="text-gray-500 font-medium text-[11px]">Expiry:</span>
+                <span className={`text-[12px] font-bold ${isExp ? 'text-red-600' : 'text-gray-900'}`}>
+                  {formatExpiry(member.expiryDate) || '—'}
+                </span>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${daysBadgeStyle}`}>
+                {daysBadgeText}
+              </span>
+            </div>
+          </div>
+
+          {/* Right Badges & Due */}
+          <div className="text-right space-y-1 flex-shrink-0">
+            <BucketBadge member={member} />
+            <PlanTypeBadge member={member} />
+            <p className="text-[10px] text-gray-400 font-medium">{derivePlanLabel(member)}</p>
+            {member.dueAmount > 0 && (
+              <p className="text-xs font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
+                Due ₹{member.dueAmount}
+              </p>
+            )}
+          </div>
+        </div>
+      </Link>
+
+      {/* Accessible delete button for desktop / click access */}
+      <button
+        type="button"
+        title="Delete member"
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          onLongPress(member)
+        }}
+        className="absolute top-2 right-2 text-gray-300 hover:text-red-500 p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <MoreVertical size={14} />
+      </button>
+    </div>
   )
 }
 
