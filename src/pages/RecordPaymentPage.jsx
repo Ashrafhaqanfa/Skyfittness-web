@@ -8,11 +8,11 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
-import { Download } from 'lucide-react'
+import { Download, Share2, MessageSquare } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useMembers } from '../services/members.js'
 import { recordPayment } from '../services/payments.js'
-import { generateReceiptPDF } from '../services/receipts.js'
+import { generateReceiptPDF, shareReceiptPDF, getWhatsAppShareUrl } from '../services/receipts.js'
 
 export default function RecordPaymentPage() {
   const { id } = useParams()
@@ -56,9 +56,7 @@ export default function RecordPaymentPage() {
         ownerId,
       })
 
-      // Generate the receipt right away — every single payment gets one,
-      // same as the iOS app. Plan label and invoice number are both
-      // auto-derived inside generateReceiptPDF if not passed explicitly.
+      // Generate the receipt right away
       const filename = generateReceiptPDF(member, savedPayment, dueBefore, dueAfter)
       setReceiptFilename(filename)
       setReceiptPayment(savedPayment)
@@ -71,8 +69,10 @@ export default function RecordPaymentPage() {
 
   function handleShareAgain() {
     const dueAfter = Math.max(0, receiptDueBefore - receiptPayment.amount)
-    generateReceiptPDF(member, receiptPayment, receiptDueBefore, dueAfter)
+    shareReceiptPDF(member, receiptPayment, receiptDueBefore, dueAfter)
   }
+
+  const dueAfter = receiptPayment ? Math.max(0, receiptDueBefore - receiptPayment.amount) : 0
 
   return (
     <div>
@@ -103,28 +103,47 @@ export default function RecordPaymentPage() {
         {error && <p className="text-sm text-red-500">{error}</p>}
 
         {receiptFilename ? (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
-            <p className="text-sm font-semibold text-green-700">
-              Payment saved. A PDF receipt was generated automatically ({receiptFilename}) and should already be in
-              your Downloads.
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-5 space-y-3">
+            <p className="text-sm font-semibold text-green-800">
+              Payment saved successfully! A PDF receipt ({receiptFilename}) was generated and downloaded.
             </p>
-            <button
-              type="button"
-              onClick={handleShareAgain}
-              className="w-full bg-accent text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-1.5"
-            >
-              <Download size={16} /> Download Receipt Again
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate(`/members/${id}`)}
-              className="w-full bg-gray-100 text-gray-700 font-semibold py-2.5 rounded-xl text-sm"
-            >
-              Done
-            </button>
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={handleShareAgain}
+                className="w-full bg-accent text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm"
+              >
+                <Share2 size={16} /> Share Receipt (PDF)
+              </button>
+
+              <a
+                href={getWhatsAppShareUrl(member, receiptPayment, dueAfter)}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full bg-green-600 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm"
+              >
+                <MessageSquare size={16} /> Share on WhatsApp
+              </a>
+
+              <button
+                type="button"
+                onClick={() => generateReceiptPDF(member, receiptPayment, receiptDueBefore, dueAfter)}
+                className="w-full bg-white text-gray-700 border border-gray-200 font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-1.5 hover:bg-gray-50"
+              >
+                <Download size={15} /> Download PDF Again
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/members/${id}`)}
+                className="w-full bg-gray-100 text-gray-700 font-semibold py-2.5 rounded-xl text-sm hover:bg-gray-200"
+              >
+                Done
+              </button>
+            </div>
           </div>
         ) : (
-          <button type="submit" disabled={saving} className="w-full bg-accent text-white font-semibold py-3 rounded-xl disabled:opacity-60">
+          <button type="submit" disabled={saving} className="w-full bg-accent text-white font-semibold py-3 rounded-xl disabled:opacity-60 shadow-md">
             {saving ? 'Saving…' : 'Record Payment'}
           </button>
         )}
