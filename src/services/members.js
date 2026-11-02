@@ -36,7 +36,11 @@ function normalizeMember(raw) {
 
 export function daysUntilExpiry(member) {
   if (!member.expiryDate) return 0
-  const ms = member.expiryDate.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)
+  const exp = new Date(member.expiryDate)
+  exp.setHours(0, 0, 0, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const ms = exp.getTime() - today.getTime()
   return Math.round(ms / 86400000)
 }
 
